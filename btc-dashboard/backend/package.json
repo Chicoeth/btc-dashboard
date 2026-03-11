@@ -1,0 +1,32 @@
+{
+  "name": "btc-dashboard-backend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "ts-node-dev --respawn src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "collect:all": "ts-node src/scripts/collectAll.ts",
+    "collect:daily": "ts-node src/scripts/dailyUpdate.ts"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "axios": "^1.6.8",
+    "better-sqlite3": "^9.4.3",
+    "node-cron": "^3.0.3",
+    "date-fns": "^3.3.1",
+    "winston": "^3.13.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/cors": "^2.8.17",
+    "@types/better-sqlite3": "^7.6.10",
+    "@types/node-cron": "^3.0.11",
+    "@types/node": "^20",
+    "typescript": "^5",
+    "ts-node-dev": "^2.0.0",
+    "ts-node": "^10.9.2"
+  }
+}
