@@ -1,14 +1,8 @@
 /**
  * pages/api/price/update.js
- *
- * Atualiza o arquivo de preços com o dado mais recente da CoinGecko.
- * Deve ser chamado uma vez por dia (via cron job externo, ou Vercel Cron).
- *
- * POST /api/price/update
- * Header: Authorization: Bearer <UPDATE_SECRET>
- *
- * Configure a variável de ambiente UPDATE_SECRET no Vercel para proteger o endpoint.
- * Configure um cron job para chamar este endpoint diariamente (ex: cron-job.org — gratuito).
+ * Atualiza o arquivo de preços com os dados mais recentes do Yahoo Finance.
+ * Chamado automaticamente pelo Vercel Cron às 02:00 UTC.
+ * Formato: [[timestamp_ms, close, high], ...]
  */
 
 import fs from 'fs';
@@ -22,7 +16,6 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  // Proteção simples com secret
   if (SECRET) {
     const auth = req.headers['authorization'];
     if (!auth || auth !== `Bearer ${SECRET}`) {
@@ -31,8 +24,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Busca os últimos 5 dias do Yahoo Finance para garantir que temos o mais recente
-    const to = Math.floor(Date.now() / 1000);
+    const to   = Math.floor(Date.now() / 1000);
     const from = to - (5 * 24 * 60 * 60);
 
     const url = `https://query1.finance.yahoo.com/v8/finance/chart/BTC-USD?period1=${from}&period2=${to}&interval=1d&events=history`;
@@ -44,60 +36,56 @@ export default async function handler(req, res) {
       signal: AbortSignal.timeout(15000),
     });
 
-    if (!response.ok) {
-      throw new Error(`Yahoo Finance HTTP ${response.status}`);
-    }
+    if (!response.ok) throw new Error(`Yahoo Finance HTTP ${response.status}`);
 
-    const json = await response.json();
+    const json   = await response.json();
     const result = json?.chart?.result?.[0];
     if (!result) throw new Error('Resposta inesperada do Yahoo Finance');
 
     const timestamps = result.timestamp;
-    const closes = result.indicators?.quote?.[0]?.close;
+    const quote  = result.indicators?.quote?.[0];
+    const closes = quote?.close;
+    const highs  = quote?.high;
 
+    // Formato: [timestamp_ms, close, high]
     const newPrices = [];
     for (let i = 0; i < timestamps.length; i++) {
       if (closes[i] != null) {
-        newPrices.push([timestamps[i] * 1000, parseFloat(closes[i].toFixed(2))]);
+        newPrices.push([
+          timestamps[i] * 1000,
+          parseFloat(closes[i].toFixed(2)),
+          highs?.[i] != null ? parseFloat(highs[i].toFixed(2)) : parseFloat(closes[i].toFixed(2)),
+        ]);
       }
     }
 
-    if (!newPrices || newPrices.length === 0) {
-      return res.status(200).json({ message: 'No new data from CoinGecko', added: 0 });
+    if (newPrices.length === 0) {
+      return res.status(200).json({ message: 'Sem dados novos', added: 0 });
     }
 
-    // Load existing data
     let existing = [];
     if (fs.existsSync(DATA_FILE)) {
       existing = JSON.parse(fs.readFileSync(DATA_FILE, 'utf-8'));
     }
 
-    // Get last known date to avoid duplicates
-    const existingDates = new Set(
-      existing.map(([ts]) => new Date(ts).toISOString().split('T')[0])
-    );
+    // Mescla: novos dados sobrescrevem por data (garantem high atualizado)
+    const byDate = new Map();
+    for (const row of existing)   byDate.set(new Date(row[0]).toISOString().split('T')[0], row);
+    for (const row of newPrices)  byDate.set(new Date(row[0]).toISOString().split('T')[0], row);
 
-    // Only add truly new dates
-    const toAdd = newPrices.filter(([ts]) => {
-      const dateStr = new Date(ts).toISOString().split('T')[0];
-      return !existingDates.has(dateStr);
-    });
-
-    if (toAdd.length === 0) {
-      return res.status(200).json({ message: 'Already up to date', added: 0 });
-    }
-
-    const merged = [...existing, ...toAdd];
-    merged.sort((a, b) => a[0] - b[0]);
-
+    const merged = Array.from(byDate.values()).sort((a, b) => a[0] - b[0]);
     fs.writeFileSync(DATA_FILE, JSON.stringify(merged), 'utf-8');
 
-    const lastDate = new Date(merged[merged.length - 1][0]).toISOString().split('T')[0];
+    const added   = newPrices.filter(([ts]) => {
+      const d = new Date(ts).toISOString().split('T')[0];
+      return !existing.some(r => new Date(r[0]).toISOString().split('T')[0] === d);
+    }).length;
+
     return res.status(200).json({
-      message: 'Updated successfully',
-      added: toAdd.length,
+      message: 'Atualizado com sucesso',
+      added,
       total: merged.length,
-      lastDate,
+      lastDate: new Date(merged[merged.length - 1][0]).toISOString().split('T')[0],
     });
 
   } catch (err) {

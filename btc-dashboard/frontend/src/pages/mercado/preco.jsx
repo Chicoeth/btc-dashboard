@@ -74,14 +74,16 @@ export default function PrecoPage() {
   const stats = (() => {
     if (!data || data.length === 0) return {};
 
-    const prices = data.map(([, p]) => p);
-    const latest = prices[prices.length - 1];
-    const prev24h = prices[prices.length - 2];
-    const change24h = ((latest - prev24h) / prev24h) * 100;
+    const latest  = data[data.length - 1][1];
+    const prev24h = data[data.length - 2]?.[1];
+    const change24h = prev24h ? ((latest - prev24h) / prev24h) * 100 : null;
 
-    // ATH
-    const ath = Math.max(...prices);
-    const athIdx = prices.lastIndexOf(ath);
+    // ATH usa o high diário (índice 2), com fallback para close
+    let ath = 0, athIdx = 0;
+    for (let i = 0; i < data.length; i++) {
+      const h = data[i][2] ?? data[i][1];
+      if (h > ath) { ath = h; athIdx = i; }
+    }
     const athDate = new Date(data[athIdx][0]).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
     const fromAth = ((latest - ath) / ath) * 100;
 
@@ -90,8 +92,7 @@ export default function PrecoPage() {
     const yearAgoEntry = data.reduce((prev, curr) => Math.abs(curr[0] - oneYearAgo) < Math.abs(prev[0] - oneYearAgo) ? curr : prev);
     const change1y = ((latest - yearAgoEntry[1]) / yearAgoEntry[1]) * 100;
 
-    // All time low (from our dataset)
-    const atl = Math.min(...prices);
+    const atl = Math.min(...data.map(([,c]) => c));
 
     return { latest, change24h, ath, athDate, fromAth, change1y, atl };
   })();
