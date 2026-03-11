@@ -31,22 +31,36 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Busca os últimos 2 dias da CoinGecko para garantir que temos o mais recente
+    // Busca os últimos 5 dias do Yahoo Finance para garantir que temos o mais recente
     const to = Math.floor(Date.now() / 1000);
-    const from = to - (3 * 24 * 60 * 60); // 3 dias de overlap
+    const from = to - (5 * 24 * 60 * 60);
 
-    const url = `https://api.coingecko.com/api/v3/coins/bitcoin/market_chart/range?vs_currency=usd&from=${from}&to=${to}&precision=2`;
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/BTC-USD?period1=${from}&period2=${to}&interval=1d&events=history`;
     const response = await fetch(url, {
-      headers: { 'Accept': 'application/json' },
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'application/json',
+      },
       signal: AbortSignal.timeout(15000),
     });
 
     if (!response.ok) {
-      throw new Error(`CoinGecko HTTP ${response.status}`);
+      throw new Error(`Yahoo Finance HTTP ${response.status}`);
     }
 
     const json = await response.json();
-    const newPrices = json.prices; // [[ts_ms, price], ...]
+    const result = json?.chart?.result?.[0];
+    if (!result) throw new Error('Resposta inesperada do Yahoo Finance');
+
+    const timestamps = result.timestamp;
+    const closes = result.indicators?.quote?.[0]?.close;
+
+    const newPrices = [];
+    for (let i = 0; i < timestamps.length; i++) {
+      if (closes[i] != null) {
+        newPrices.push([timestamps[i] * 1000, parseFloat(closes[i].toFixed(2))]);
+      }
+    }
 
     if (!newPrices || newPrices.length === 0) {
       return res.status(200).json({ message: 'No new data from CoinGecko', added: 0 });
