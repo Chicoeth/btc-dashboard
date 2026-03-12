@@ -1,13 +1,5 @@
-/**
- * components/charts/FearGreedChart.jsx
- * Gráfico duplo: preço BTC colorido por F&G (topo) + linha F&G (baixo)
- * Dados preço: [[ts_ms, close, high], ...]
- * Dados F&G:   [[ts_ms, value, classification], ...]
- */
+import { useEffect, useRef, useMemo, useState, useCallback } from 'react';
 
-import { useEffect, useRef, useMemo, useState } from 'react';
-
-// Converte valor 0–100 em cor RGB viva
 function fngColor(value, alpha = 1) {
   const v = Math.max(0, Math.min(100, value));
   let r, g, b;
@@ -47,6 +39,39 @@ const PERIODS = [
 ];
 const LEGEND_STEPS = [100,90,80,70,60,50,40,30,20,10,0];
 
+// Build colored line as N piecewise series of 2 points each
+// Groups consecutive points of similar color into segments for performance
+function buildColoredSeries(merged) {
+  if (!merged.length) return [];
+  const series = [];
+  let segStart = 0;
+
+  for (let i = 1; i <= merged.length; i++) {
+    const prev = merged[i - 1];
+    const curr = merged[i];
+    const colorChanged = !curr || Math.abs(curr.fng - prev.fng) > 4 || i === merged.length;
+
+    if (colorChanged || i === merged.length) {
+      const seg = merged.slice(segStart, i);
+      if (seg.length >= 2) {
+        const avgFng = Math.round(seg.reduce((s, d) => s + d.fng, 0) / seg.length);
+        series.push({
+          type: 'line',
+          xAxisIndex: 0, yAxisIndex: 0,
+          data: seg.map(d => [d.date, d.close]),
+          smooth: false, symbol: 'none',
+          lineStyle: { color: fngColor(avgFng), width: 1.5, cap: 'round' },
+          silent: true,
+          emphasis: { disabled: true },
+          z: 2,
+        });
+      }
+      segStart = i - 1;
+    }
+  }
+  return series;
+}
+
 export default function FearGreedChart({ priceData, fngData, loading, error }) {
   const chartRef    = useRef(null);
   const chartInst   = useRef(null);
@@ -54,16 +79,16 @@ export default function FearGreedChart({ priceData, fngData, loading, error }) {
   const [colored, setColored]           = useState(true);
   const [activePeriod, setActivePeriod] = useState('Todo');
   const [echartsReady, setEchartsReady] = useState(false);
+  // Track actual zoom for log scale min/max calculation
+  const [currentZoom, setCurrentZoom]   = useState({ start: 0, end: 100 });
 
   useEffect(() => { import('echarts').then(() => setEchartsReady(true)); }, []);
 
-  // Merge price + fng by date
   const merged = useMemo(() => {
     if (!priceData?.length || !fngData?.length) return [];
     const fngMap = new Map();
     for (const [ts, val, cls] of fngData)
       fngMap.set(new Date(ts).toISOString().split('T')[0], { val, cls });
-
     return priceData
       .map(([ts, close]) => {
         const date = new Date(ts).toISOString().split('T')[0];
@@ -73,7 +98,6 @@ export default function FearGreedChart({ priceData, fngData, loading, error }) {
       .filter(Boolean);
   }, [priceData, fngData]);
 
-  // Zoom range
   const zoomRange = useMemo(() => {
     if (!merged.length) return { start: 0, end: 100 };
     const period = PERIODS.find(p => p.label === activePeriod);
@@ -86,14 +110,36 @@ export default function FearGreedChart({ priceData, fngData, loading, error }) {
     return { start: startPct, end: 100 };
   }, [merged, activePeriod]);
 
-  const chartOption = useMemo(() => {
+  // Compute log-safe min/max from visible data slice
+  const logYBounds = useMemo(() => {
+    if (!merged.length || !isLog) return {};
+    const { start, end } = currentZoom;
+    const i0 = Math.floor((start / 100) * (merged.length - 1));
+    const i1 = Math.ceil((end   / 100) * (merged.length - 1));
+    const visible = merged.slice(i0, i1 + 1);
+    if (!visible.length) return {};
+    const prices = visible.map(d => d.close).filter(v => v > 0);
+    const minP = Math.min(...prices);
+    const maxP = Math.max(...prices);
+    // Add 10% padding in log space
+    const logMin = Math.pow(10, Math.log10(minP) - 0.08);
+    const logMax = Math.pow(10, Math.log10(maxP) + 0.08);
+    return { min: logMin, max: logMax };
+  }, [merged, isLog, currentZoom]);
+
+  const coloredSeries = useMemo(() => {
+    if (!colored || !merged.length) return [];
+    return buildColoredSeries(merged);
+  }, [merged, colored]);
+
+  const dates   = useMemo(() => merged.map(d => d.date), [merged]);
+  const closes  = useMemo(() => merged.map(d => [d.date, d.close]), [merged]);
+  const fngVals = useMemo(() => merged.map(d => d.fng), [merged]);
+
+  const buildOption = useCallback((zoom) => {
     if (!merged.length) return null;
-
-    const dates   = merged.map(d => d.date);
-    const closes  = merged.map(d => d.close);
-    const fngVals = merged.map(d => d.fng);
-
-    const spanDays = Math.round(((zoomRange.end - zoomRange.start) / 100) * dates.length);
+    const z = zoom || zoomRange;
+    const spanDays = Math.round(((z.end - z.start) / 100) * dates.length);
 
     const xLabelFormatter = (val) => {
       const d = new Date(val), m = d.getMonth(), y = d.getFullYear(), day = d.getDate();
@@ -108,43 +154,65 @@ export default function FearGreedChart({ priceData, fngData, loading, error }) {
                     : spanDays > 60    ? Math.floor(spanDays/7)
                     : 'auto';
 
-    // Build colored price series using visualMap on the fng value (dim 1 of dataset)
-    // We use a dataset with [date, close, fngVal] and map visualMap on dim 2
-    const priceDataset = merged.map(d => [d.date, d.close, d.fng]);
+    // Compute log bounds for current zoom
+    let yLogBounds = {};
+    if (isLog) {
+      const i0 = Math.floor((z.start / 100) * (merged.length - 1));
+      const i1 = Math.ceil((z.end   / 100) * (merged.length - 1));
+      const visible = merged.slice(i0, i1 + 1);
+      const prices  = visible.map(d => d.close).filter(v => v > 0);
+      if (prices.length) {
+        const minP = Math.min(...prices);
+        const maxP = Math.max(...prices);
+        yLogBounds = {
+          min: Math.pow(10, Math.log10(minP) - 0.1),
+          max: Math.pow(10, Math.log10(maxP) + 0.1),
+        };
+      }
+    }
+
+    // Base price series (invisible, just for tooltip and axis reference)
+    const baseSeries = {
+      type: 'line',
+      name: '__price__',
+      xAxisIndex: 0, yAxisIndex: 0,
+      data: closes,
+      smooth: false, symbol: 'none',
+      lineStyle: { color: colored ? 'transparent' : '#f7931a', width: colored ? 0 : 1.5 },
+      areaStyle: colored ? undefined : {
+        color: { type:'linear', x:0,y:0,x2:0,y2:1,
+          colorStops:[{offset:0,color:'rgba(247,147,26,0.15)'},{offset:1,color:'rgba(247,147,26,0)'}] }
+      },
+      z: 1,
+    };
+
+    const fngSeries = {
+      type: 'line',
+      name: '__fng__',
+      xAxisIndex: 1, yAxisIndex: 1,
+      data: fngVals,
+      smooth: true, symbol: 'none',
+      lineStyle: { width: 1.5, color: '#9090b0' },
+      areaStyle: {
+        color: { type:'linear', x:0,y:0,x2:0,y2:1,
+          colorStops:[{offset:0,color:'rgba(144,144,176,0.12)'},{offset:1,color:'rgba(144,144,176,0)'}] }
+      },
+    };
 
     return {
       backgroundColor: 'transparent',
       animation: false,
-      dataset: [{ source: priceDataset }],
       grid: [
-        { top: 16, left: 68, right: 24, bottom: '44%' },
-        { top: '60%', left: 68, right: 24, bottom: 80 },
+        { top: 16, left: 72, right: 24, bottom: '44%' },
+        { top: '60%', left: 72, right: 24, bottom: 80 },
       ],
-
-      // VisualMap on dim 2 (fng value) to color the price line
-      visualMap: colored ? [{
-        show: false,
-        seriesIndex: 0,
-        dimension: 2,
-        min: 0,
-        max: 100,
-        inRange: {
-          color: [
-            '#e8000a',  // 0   — Extreme Fear
-            '#e8000a',  // 10
-            '#f07000',  // 25  — Fear
-            '#f5c400',  // 50  — Neutral
-            '#80c400',  // 75  — Greed
-            '#00c44f',  // 100 — Extreme Greed
-          ],
-        },
-      }] : [],
-
       tooltip: {
         trigger: 'axis',
         axisPointer: {
+          // Cross pointer that spans both grids
           type: 'line',
-          lineStyle: { color: 'rgba(255,255,255,0.12)', width: 1, type: 'dashed' },
+          link: [{ xAxisIndex: 'all' }],
+          lineStyle: { color: 'rgba(255,255,255,0.15)', width: 1, type: 'dashed' },
           label: { show: false },
         },
         backgroundColor: '#111120',
@@ -152,19 +220,16 @@ export default function FearGreedChart({ priceData, fngData, loading, error }) {
         borderWidth: 1,
         padding: [10, 14],
         formatter(params) {
-          // params[0] = price series, params[1] = fng line series
-          const priceParam = params.find(p => p.seriesIndex === 0);
-          const fngParam   = params.find(p => p.seriesIndex === 1);
-          if (!priceParam) return '';
-
-          const idx     = priceParam.dataIndex;
-          const row     = merged[idx];
-          const fngVal  = row?.fng ?? fngParam?.value;
-          const color   = fngColor(fngVal);
-
+          const p = params.find(p => p.seriesName === '__price__');
+          const f = params.find(p => p.seriesName === '__fng__');
+          if (!p) return '';
+          const idx    = p.dataIndex;
+          const row    = merged[idx];
+          const fngVal = row?.fng ?? f?.value;
+          const color  = fngColor(fngVal ?? 50);
           return `
-            <div style="font-family:JetBrains Mono,monospace;font-size:11px;color:#9090b0;margin-bottom:5px">${fmtDate(new Date(priceParam.axisValue).getTime())}</div>
-            <div style="font-size:16px;font-weight:700;color:#e8e8f0;margin-bottom:6px">${formatPriceFull(row?.close ?? priceParam.value)}</div>
+            <div style="font-family:JetBrains Mono,monospace;font-size:11px;color:#9090b0;margin-bottom:5px">${fmtDate(new Date(p.axisValue).getTime())}</div>
+            <div style="font-size:16px;font-weight:700;color:#e8e8f0;margin-bottom:6px">${formatPriceFull(row?.close ?? p.value[1])}</div>
             <div style="display:flex;align-items:center;gap:6px">
               <span style="width:9px;height:9px;border-radius:50%;background:${color};display:inline-block;flex-shrink:0"></span>
               <span style="font-family:JetBrains Mono,monospace;font-size:12px;color:${color};font-weight:600">${fngVal} — ${row?.cls ?? ''}</span>
@@ -172,10 +237,9 @@ export default function FearGreedChart({ priceData, fngData, loading, error }) {
           `;
         },
       },
-
       xAxis: [
         {
-          type: 'category', gridIndex: 0,
+          type: 'category', data: dates, gridIndex: 0,
           axisLine: { lineStyle: { color: '#1e1e35' } },
           axisTick: { show: false },
           axisLabel: { show: false },
@@ -197,14 +261,17 @@ export default function FearGreedChart({ priceData, fngData, loading, error }) {
       ],
       yAxis: [
         {
-          type: isLog ? 'log' : 'value', logBase: 10, scale: true,
+          type: isLog ? 'log' : 'value',
+          logBase: 10,
+          // For log: explicit bounds; for linear: scale:true handles it
+          ...(isLog ? yLogBounds : { scale: true }),
           gridIndex: 0,
           name: 'Preço BTC (USD)',
           nameLocation: 'middle',
-          nameGap: 52,
+          nameGap: 56,
           nameTextStyle: {
             color: '#5a5a80', fontFamily: 'JetBrains Mono, monospace',
-            fontSize: 9, letterSpacing: 1,
+            fontSize: 11, letterSpacing: 1,
           },
           axisLine: { show: false }, axisTick: { show: false },
           axisLabel: { color: '#5a5a80', fontFamily: 'JetBrains Mono, monospace', fontSize: 10, formatter: formatPrice },
@@ -215,21 +282,20 @@ export default function FearGreedChart({ priceData, fngData, loading, error }) {
           gridIndex: 1,
           name: 'Medo & Ganância',
           nameLocation: 'middle',
-          nameGap: 52,
+          nameGap: 56,
           nameTextStyle: {
             color: '#5a5a80', fontFamily: 'JetBrains Mono, monospace',
-            fontSize: 9, letterSpacing: 1,
+            fontSize: 11, letterSpacing: 1,
           },
           axisLine: { show: false }, axisTick: { show: false },
           axisLabel: { color: '#5a5a80', fontFamily: 'JetBrains Mono, monospace', fontSize: 10 },
           splitLine: { lineStyle: { color: '#1e1e35', type: 'dashed' } },
         },
       ],
-
       dataZoom: [
         {
           type: 'slider', xAxisIndex: [0, 1], bottom: 10, height: 40,
-          start: zoomRange.start, end: zoomRange.end,
+          start: z.start, end: z.end,
           borderColor: '#1e1e35', backgroundColor: 'rgba(10,10,15,0.6)',
           fillerColor: 'rgba(247,147,26,0.08)',
           handleStyle: { color: '#f7931a', borderColor: '#f7931a' },
@@ -245,45 +311,15 @@ export default function FearGreedChart({ priceData, fngData, loading, error }) {
           textStyle: { color: '#5a5a80', fontFamily: 'JetBrains Mono, monospace', fontSize: 10 },
           labelFormatter(val, str) { return str ? str.substring(0,7) : ''; },
         },
-        { type: 'inside', xAxisIndex: [0,1], start: zoomRange.start, end: zoomRange.end },
+        { type: 'inside', xAxisIndex: [0,1], start: z.start, end: z.end },
       ],
-
-      series: [
-        {
-          // Price — uses dataset dim0=date, dim1=close, dim2=fng; visualMap colors by dim2
-          type: 'line',
-          datasetIndex: 0,
-          xAxisIndex: 0, yAxisIndex: 0,
-          encode: { x: 0, y: 1 },
-          smooth: false, symbol: 'none',
-          lineStyle: { width: 1.5 },
-          // When not colored, fallback to orange
-          ...(colored ? {} : {
-            lineStyle: { color: '#f7931a', width: 1.5 },
-            areaStyle: {
-              color: { type:'linear', x:0,y:0,x2:0,y2:1,
-                colorStops:[{offset:0,color:'rgba(247,147,26,0.15)'},{offset:1,color:'rgba(247,147,26,0)'}] }
-            },
-          }),
-        },
-        {
-          // F&G line — secondary grid
-          type: 'line',
-          xAxisIndex: 1, yAxisIndex: 1,
-          data: fngVals,
-          smooth: true, symbol: 'none',
-          lineStyle: { width: 1.5, color: '#9090b0' },
-          areaStyle: {
-            color: { type:'linear', x:0,y:0,x2:0,y2:1,
-              colorStops:[{offset:0,color:'rgba(144,144,176,0.12)'},{offset:1,color:'rgba(144,144,176,0)'}] }
-          },
-        },
-      ],
+      series: [baseSeries, fngSeries, ...(colored ? coloredSeries : [])],
     };
-  }, [merged, isLog, colored, zoomRange]);
+  }, [merged, dates, closes, fngVals, isLog, colored, zoomRange, coloredSeries]);
 
+  // Init chart
   useEffect(() => {
-    if (!echartsReady || !chartRef.current || !chartOption) return;
+    if (!echartsReady || !chartRef.current || !merged.length) return;
     const init = async () => {
       const echarts = await import('echarts');
       let chart = chartInst.current;
@@ -291,18 +327,41 @@ export default function FearGreedChart({ priceData, fngData, loading, error }) {
         chart = echarts.init(chartRef.current, null, { renderer: 'canvas' });
         chartInst.current = chart;
         new ResizeObserver(() => chart.resize()).observe(chartRef.current);
+
+        // Listen to zoom events to update log scale bounds
+        chart.on('datazoom', (evt) => {
+          const option = chart.getOption();
+          const dz = option.dataZoom?.[0];
+          if (dz) {
+            const start = dz.start ?? 0;
+            const end   = dz.end   ?? 100;
+            setCurrentZoom({ start, end });
+            // Re-apply option with new bounds
+            const newOpt = buildOption({ start, end });
+            if (newOpt) chart.setOption(newOpt, { notMerge: false });
+          }
+        });
       }
-      chart.setOption(chartOption, { notMerge: true });
+      const option = buildOption(zoomRange);
+      if (option) chart.setOption(option, { notMerge: true });
+      setCurrentZoom(zoomRange);
     };
     init();
-  }, [echartsReady, chartOption]);
+  }, [echartsReady, merged.length]);
+
+  // Update when settings change
+  useEffect(() => {
+    const chart = chartInst.current;
+    if (!chart || !merged.length) return;
+    const option = buildOption(currentZoom);
+    if (option) chart.setOption(option, { notMerge: true });
+  }, [isLog, colored, zoomRange, coloredSeries]);
 
   const latest      = merged[merged.length - 1];
   const latestColor = latest ? fngColor(latest.fng) : '#9090b0';
 
   return (
     <div className="fng-chart-wrapper">
-      {/* Header */}
       <div className="chart-header">
         <div className="chart-left">
           {latest && (
@@ -337,7 +396,6 @@ export default function FearGreedChart({ priceData, fngData, loading, error }) {
         </div>
       </div>
 
-      {/* Chart + Legend */}
       <div className="chart-body">
         <div className="chart-area">
           {(loading || error || !merged.length) && (
@@ -350,8 +408,6 @@ export default function FearGreedChart({ priceData, fngData, loading, error }) {
           <div ref={chartRef} className="echarts-canvas"
             style={{ opacity: loading||error||!merged.length ? 0 : 1 }} />
         </div>
-
-        {/* Color scale legend */}
         <div className="legend">
           <div className="legend-bar" />
           <div className="legend-labels">
@@ -362,7 +418,6 @@ export default function FearGreedChart({ priceData, fngData, loading, error }) {
         </div>
       </div>
 
-      {/* Footer */}
       {merged.length > 0 && (
         <div className="chart-footer">
           <span>{merged.length.toLocaleString('pt-BR')} dias de dados</span>
@@ -379,7 +434,6 @@ export default function FearGreedChart({ priceData, fngData, loading, error }) {
 
       <style jsx>{`
         .fng-chart-wrapper { display:flex; flex-direction:column; height:100%; }
-
         .chart-header {
           display:flex; align-items:center; justify-content:space-between;
           padding:14px 20px 12px; border-bottom:1px solid var(--border-subtle);
@@ -394,7 +448,6 @@ export default function FearGreedChart({ priceData, fngData, loading, error }) {
           font-family:var(--font-mono); font-size:12px; font-weight:600;
           padding:3px 10px; border-radius:20px; border:1px solid; letter-spacing:0.03em;
         }
-
         .chart-controls { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
         .period-selector, .toggle-group {
           display:flex; background:rgba(255,255,255,0.03);
@@ -409,11 +462,9 @@ export default function FearGreedChart({ priceData, fngData, loading, error }) {
         .period-btn:last-child, .scale-btn:last-child { border-right:none; }
         .period-btn:hover, .scale-btn:hover { color:var(--text-primary); background:rgba(255,255,255,0.04); }
         .period-btn.active, .scale-btn.active { color:var(--brand-orange); background:rgba(247,147,26,0.1); }
-
         .chart-body { flex:1; display:flex; min-height:0; }
         .chart-area { flex:1; position:relative; min-height:520px; }
         .echarts-canvas { width:100%; height:100%; min-height:520px; transition:opacity 0.3s; }
-
         .chart-state {
           position:absolute; inset:0; display:flex; flex-direction:column;
           align-items:center; justify-content:center; gap:12px;
@@ -425,7 +476,6 @@ export default function FearGreedChart({ priceData, fngData, loading, error }) {
           animation:spin 0.8s linear infinite;
         }
         @keyframes spin { to { transform:rotate(360deg); } }
-
         .legend {
           display:flex; flex-direction:row; align-items:stretch;
           padding:16px 12px 80px 8px; gap:4px;
@@ -434,14 +484,11 @@ export default function FearGreedChart({ priceData, fngData, loading, error }) {
           width:10px; border-radius:5px; flex-shrink:0;
           background:linear-gradient(to bottom, #00c44f 0%, #f5c400 50%, #e8000a 100%);
         }
-        .legend-labels {
-          display:flex; flex-direction:column; justify-content:space-between;
-        }
+        .legend-labels { display:flex; flex-direction:column; justify-content:space-between; }
         .legend-label {
           font-family:var(--font-mono); font-size:9px; font-weight:500;
           line-height:1; letter-spacing:0.03em;
         }
-
         .chart-footer {
           display:flex; align-items:center; gap:8px; padding:8px 20px;
           border-top:1px solid var(--border-subtle); font-family:var(--font-mono);

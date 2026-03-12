@@ -170,10 +170,19 @@ export default function PriceChart({ data, loading, error }) {
         boundaryGap: false,
       },
 
+      // Bounds para escala log baseados nos dados visíveis
+      const i0v = Math.floor((zoomRange.start / 100) * (data.length - 1));
+      const i1v = Math.ceil((zoomRange.end   / 100) * (data.length - 1));
+      const visiblePrices = data.slice(i0v, i1v + 1).map(d => d[1]).filter(v => v > 0);
+      const logBounds = isLog && visiblePrices.length ? {
+        min: Math.pow(10, Math.log10(Math.min(...visiblePrices)) - 0.1),
+        max: Math.pow(10, Math.log10(Math.max(...visiblePrices)) + 0.1),
+      } : { scale: true };
+
       yAxis: {
         type: isLog ? 'log' : 'value',
         logBase: 10,
-        scale: true, // ajusta eixo Y ao range visível automaticamente
+        ...(isLog ? logBounds : { scale: true }),
         axisLine: { show: false },
         axisTick: { show: false },
         axisLabel: {
