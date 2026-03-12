@@ -92,6 +92,7 @@ function buildColoredSegments(data, gridIndex, valueIndex) {
     }
   }
   return series;
+}
 
 // Série de área colorida do MVRV — sempre visível (independe do toggle COR)
 // Linha transparente, apenas preenchimento sutil colorido
