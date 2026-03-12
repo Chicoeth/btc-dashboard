@@ -59,26 +59,31 @@ const PERIODS = [
 const LEGEND_VALUES = [2.5, 2.0, 1.5, 1.0, 0.5];
 
 // Quebra série de preço em segmentos coloridos por MVRV
-function buildColoredSegments(data, yIndex, valueIndex) {
+function buildColoredSegments(data, gridIndex, valueIndex) {
+  // Usa índice numérico como X para casar exatamente com o xAxis category
   if (!data.length) return [];
   const THRESHOLD = 0.06;
   const series = [];
   let segStart = 0;
 
   for (let i = 1; i <= data.length; i++) {
-    const ended = i === data.length || Math.abs(data[i][3] - data[i-1][3]) > THRESHOLD;
+    const ended = i === data.length || Math.abs(data[i]?.[3] - data[i-1][3]) > THRESHOLD;
     if (ended) {
-      const seg = data.slice(segStart, i);
-      if (seg.length >= 2) {
-        const avgMvrv = seg.reduce((s, d) => s + d[3], 0) / seg.length;
+      const indices = [];
+      for (let j = segStart; j < i; j++) indices.push(j);
+      if (indices.length >= 2) {
+        const avgMvrv = indices.reduce((s, j) => s + data[j][3], 0) / indices.length;
+        // Conecta com o ponto anterior para não ter gaps
+        const start = segStart > 0 ? segStart - 1 : segStart;
         series.push({
           type: 'line',
-          xAxisIndex: yIndex === 0 ? 0 : 1,
-          yAxisIndex: yIndex,
-          data: seg.map(d => [d[0], d[valueIndex]]),
+          xAxisIndex: gridIndex,
+          yAxisIndex: gridIndex,
+          // Usa índice numérico — mapeia direto ao array do xAxis category
+          data: Array.from({length: i - start}, (_, k) => [new Date(data[start + k][0]).toISOString().split('T')[0], data[start + k][valueIndex]]),
           smooth: false, symbol: 'none',
-          lineStyle: { color: mvrvColor(avgMvrv), width: yIndex === 0 ? 1.5 : 1.8, cap: 'round' },
-          areaStyle: yIndex === 1 ? { color: mvrvColor(avgMvrv, 0.07) } : undefined,
+          lineStyle: { color: mvrvColor(avgMvrv), width: gridIndex === 0 ? 1.5 : 1.8, cap: 'round' },
+          areaStyle: gridIndex === 1 ? { color: mvrvColor(avgMvrv, 0.07) } : undefined,
           silent: true, emphasis: { disabled: true },
           z: 3,
         });
@@ -128,7 +133,7 @@ export default function MVRVChart({ mvrvData, loading, error }) {
   const buildOption = useCallback((zoom) => {
     if (!data.length) return null;
     const z = zoom || zoomRange;
-    const timestamps = data.map(d => d[0]);
+    const timestamps = data.map(d => new Date(d[0]).toISOString().split('T')[0]);
     const spanDays   = Math.round(((z.end - z.start) / 100) * data.length);
 
     // Labels X adaptativos
@@ -164,7 +169,7 @@ export default function MVRVChart({ mvrvData, loading, error }) {
     const basePriceSeries = {
       type: 'line', name: '__price__',
       xAxisIndex: 0, yAxisIndex: 0,
-      data: data.map(d => [d[0], d[1]]),
+      data: data.map(d => [new Date(d[0]).toISOString().split('T')[0], d[1]]),
       symbol: 'none', smooth: false,
       lineStyle: { color: colored ? 'transparent' : '#f7931a', width: colored ? 0 : 1.5 },
       areaStyle: colored ? undefined : {
@@ -178,7 +183,7 @@ export default function MVRVChart({ mvrvData, loading, error }) {
     const realizedSeries = {
       type: 'line', name: '__realized__',
       xAxisIndex: 0, yAxisIndex: 0,
-      data: data.map(d => [d[0], d[2]]),
+      data: data.map(d => [new Date(d[0]).toISOString().split('T')[0], d[2]]),
       symbol: 'none', smooth: false,
       lineStyle: { color: '#7878c0', width: 1.2, type: 'dashed' },
       z: 2,
@@ -188,7 +193,7 @@ export default function MVRVChart({ mvrvData, loading, error }) {
     const baseMvrvSeries = {
       type: 'line', name: '__mvrv__',
       xAxisIndex: 1, yAxisIndex: 1,
-      data: data.map(d => [d[0], d[3]]),
+      data: data.map(d => [new Date(d[0]).toISOString().split('T')[0], d[3]]),
       symbol: 'none', smooth: false,
       lineStyle: { color: 'transparent', width: 0 },
       z: 1,
