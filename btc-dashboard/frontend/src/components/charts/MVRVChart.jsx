@@ -574,7 +574,7 @@ export default function MVRVChart({ mvrvData, loading, error }) {
         }
         .period-btn:hover, .scale-btn:hover { color:var(--text-primary); background:rgba(255,255,255,0.04); }
         .period-btn.active, .scale-btn.active { color:var(--brand-orange); background:rgba(247,147,26,0.1); }
-        .chart-body { flex:1; display:flex; min-height:0; position:relative; }
+        .chart-body { flex:1; display:flex; min-height:0; }
         .chart-area { flex:1; position:relative; min-height:520px; }
         .echarts-canvas { width:100%; height:100%; min-height:520px; transition:opacity 0.3s; }
         .chart-state {
@@ -589,13 +589,8 @@ export default function MVRVChart({ mvrvData, loading, error }) {
         }
         @keyframes spin { to { transform:rotate(360deg); } }
         .legend {
-          position:absolute;
-          right:4px;
-          top:calc(72% + 16px);
-          bottom:88px;
           display:flex; flex-direction:row; align-items:stretch;
-          padding:0; gap:4px;
-          pointer-events:none;
+          padding:16px 8px 84px 4px; gap:4px; flex-shrink:0;
         }
         .legend-bar {
           width:10px; border-radius:5px; flex-shrink:0; height:100%;
