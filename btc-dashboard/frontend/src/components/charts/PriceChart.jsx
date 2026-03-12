@@ -1,6 +1,5 @@
 /**
  * components/charts/PriceChart.jsx
- * Gráfico de preço histórico do BTC.
  * Formato de dados: [[timestamp_ms, close, high], ...]
  */
 
@@ -21,6 +20,8 @@ const PERIODS = [
   { label: 'Todo', months: null },
 ];
 
+const MONTHS_PT = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+
 function formatPrice(value) {
   if (value >= 1000000) return '$' + (value / 1000000).toFixed(2) + 'M';
   if (value >= 1000)    return '$' + (value / 1000).toFixed(0) + 'k';
@@ -31,33 +32,30 @@ function formatPriceFull(value) {
   return '$' + value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function formatDate(ts) {
+function formatDateLabel(ts) {
   return new Date(ts).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
 export default function PriceChart({ data, loading, error }) {
-  const chartRef            = useRef(null);
-  const echartsInstance     = useRef(null);
-  const [isLog, setIsLog]   = useState(true);
+  const chartRef    = useRef(null);
+  const chartInst   = useRef(null);
+  const [isLog, setIsLog]               = useState(true);
   const [activePeriod, setActivePeriod] = useState('Todo');
-  const [isEChartsLoaded, setIsEChartsLoaded] = useState(false);
+  const [echartsReady, setEchartsReady] = useState(false);
 
   useEffect(() => {
-    import('echarts').then(() => setIsEChartsLoaded(true));
+    import('echarts').then(() => setEchartsReady(true));
   }, []);
 
-  // Zoom range (start/end %) for selected period
   const zoomRange = useMemo(() => {
     if (!data || data.length === 0) return { start: 0, end: 100 };
     const period = PERIODS.find(p => p.label === activePeriod);
     if (!period?.months) return { start: 0, end: 100 };
-
     const now      = Date.now();
     const fromTs   = now - period.months * 30.44 * 24 * 60 * 60 * 1000;
     const firstTs  = data[0][0];
     const lastTs   = data[data.length - 1][0];
-    const total    = lastTs - firstTs;
-    const startPct = Math.max(0, ((fromTs - firstTs) / total) * 100);
+    const startPct = Math.max(0, ((fromTs - firstTs) / (lastTs - firstTs)) * 100);
     return { start: startPct, end: 100 };
   }, [data, activePeriod]);
 
@@ -66,6 +64,36 @@ export default function PriceChart({ data, loading, error }) {
 
     const timestamps = data.map(([ts]) => new Date(ts).toISOString().split('T')[0]);
     const closes     = data.map(([, c]) => c);
+
+    // Quantos dias ficam visíveis no zoom atual
+    const spanDays = Math.round(((zoomRange.end - zoomRange.start) / 100) * timestamps.length);
+
+    // Formatter do eixo X: adapta granularidade ao zoom
+    const xLabelFormatter = (val) => {
+      const d = new Date(val);
+      const month = d.getMonth();
+      const year  = d.getFullYear();
+
+      if (spanDays > 365 * 3) {
+        // Visão ampla: só mostra ano, apenas em janeiro
+        return month === 0 ? String(year) : '';
+      } else if (spanDays > 180) {
+        // Visão média: mês abreviado a cada trimestre + ano em janeiro
+        if (month === 0) return String(year);
+        if (month % 3 === 0) return MONTHS_PT[month];
+        return '';
+      } else if (spanDays > 60) {
+        // Visão mensal: todos os meses
+        return month === 0 ? String(year) : MONTHS_PT[month];
+      } else {
+        // Visão semanal: semana e mês
+        const day = d.getDate();
+        if (day <= 7) return MONTHS_PT[month] + (month === 0 ? ' ' + year : '');
+        if (day <= 14) return '14';
+        if (day <= 21) return '21';
+        return '';
+      }
+    };
 
     const halvingLines = HALVINGS
       .filter(h => timestamps.includes(h.date))
@@ -107,7 +135,7 @@ export default function PriceChart({ data, loading, error }) {
             ? `<div style="color:#f7931a;font-size:11px;margin-top:4px;font-family:JetBrains Mono,monospace">⬡ ${halving.label} · ${halving.reward}</div>`
             : '';
           return `
-            <div style="font-family:JetBrains Mono,monospace;font-size:11px;color:#9090b0;margin-bottom:5px">${formatDate(new Date(p.axisValue).getTime())}</div>
+            <div style="font-family:JetBrains Mono,monospace;font-size:11px;color:#9090b0;margin-bottom:5px">${formatDateLabel(new Date(p.axisValue).getTime())}</div>
             <div style="font-size:16px;font-weight:600;color:#e8e8f0">${formatPriceFull(p.value)}</div>
             ${halvingNote}
           `;
@@ -124,8 +152,13 @@ export default function PriceChart({ data, loading, error }) {
           fontSize: 10,
           margin: 10,
           showMinLabel: true,
-          showMaxLabel: true,
-          formatter(val) { return new Date(val).getFullYear(); },
+          showMaxLabel: false,
+          formatter: xLabelFormatter,
+          // Intervalo automático baseado no span
+          interval: spanDays > 365 * 3 ? Math.floor(timestamps.length / 14)
+                  : spanDays > 180     ? Math.floor(spanDays / 5)
+                  : spanDays > 60      ? Math.floor(spanDays / 6)
+                  : 'auto',
         },
         splitLine: { show: false },
         boundaryGap: false,
@@ -133,7 +166,7 @@ export default function PriceChart({ data, loading, error }) {
       yAxis: {
         type: isLog ? 'log' : 'value',
         logBase: 10,
-        // scale: true faz o eixo Y ajustar automaticamente ao range visível
+        // scale:true faz o eixo Y ajustar ao range visível automaticamente
         scale: true,
         axisLine: { show: false },
         axisTick: { show: false },
@@ -166,11 +199,7 @@ export default function PriceChart({ data, loading, error }) {
             lineStyle: { color: '#252540', width: 1 },
             areaStyle: { color: 'rgba(37,37,64,0.4)' },
           },
-          textStyle: {
-            color: '#5a5a80',
-            fontFamily: 'JetBrains Mono, monospace',
-            fontSize: 10,
-          },
+          textStyle: { color: '#5a5a80', fontFamily: 'JetBrains Mono, monospace', fontSize: 10 },
           labelFormatter(val, str) { return str ? str.substring(0, 7) : ''; },
         },
         {
@@ -180,81 +209,65 @@ export default function PriceChart({ data, loading, error }) {
           end: zoomRange.end,
         },
       ],
-      series: [
-        {
-          type: 'line',
-          data: closes,
-          smooth: false,
-          symbol: 'none',
-          lineStyle: { color: '#f7931a', width: 1.5 },
-          areaStyle: {
-            color: {
-              type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
-              colorStops: [
-                { offset: 0, color: 'rgba(247,147,26,0.18)' },
-                { offset: 1, color: 'rgba(247,147,26,0.00)' },
-              ],
-            },
+      series: [{
+        type: 'line',
+        data: closes,
+        smooth: false,
+        symbol: 'none',
+        lineStyle: { color: '#f7931a', width: 1.5 },
+        areaStyle: {
+          color: {
+            type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+            colorStops: [
+              { offset: 0, color: 'rgba(247,147,26,0.18)' },
+              { offset: 1, color: 'rgba(247,147,26,0.00)' },
+            ],
           },
-          markLine: halvingLines.length > 0 ? {
-            silent: false,
-            symbol: ['none', 'none'],
-            data: halvingLines,
-          } : undefined,
         },
-      ],
+        markLine: halvingLines.length > 0 ? {
+          silent: false,
+          symbol: ['none', 'none'],
+          data: halvingLines,
+        } : undefined,
+      }],
     };
   }, [data, isLog, zoomRange]);
 
   // Init / update chart
   useEffect(() => {
-    if (!isEChartsLoaded || !chartRef.current || !chartOption) return;
-    let chart = echartsInstance.current;
-
+    if (!echartsReady || !chartRef.current || !chartOption) return;
     const init = async () => {
       const echarts = await import('echarts');
+      let chart = chartInst.current;
       if (!chart) {
         chart = echarts.init(chartRef.current, null, { renderer: 'canvas' });
-        echartsInstance.current = chart;
+        chartInst.current = chart;
         const ro = new ResizeObserver(() => chart.resize());
         ro.observe(chartRef.current);
       }
-      chart.setOption(chartOption, { notMerge: false });
+      chart.setOption(chartOption, { notMerge: true });
     };
     init();
-  }, [isEChartsLoaded, chartOption]);
+  }, [echartsReady, chartOption]);
 
-  // Sync zoom when period changes
-  useEffect(() => {
-    const chart = echartsInstance.current;
-    if (!chart) return;
-    chart.dispatchAction({
-      type: 'dataZoom',
-      dataZoomIndex: [0, 1],
-      start: zoomRange.start,
-      end: zoomRange.end,
-    });
-  }, [zoomRange]);
-
-  // Stats — ATH usa high (índice 2), resto usa close (índice 1)
+  // Stats — ATH usa high (índice 2)
   const stats = useMemo(() => {
     if (!data || data.length === 0) return {};
-    const latest   = data[data.length - 1][1];
-    const prev     = data[data.length - 2]?.[1];
+    const latest  = data[data.length - 1][1];
+    const prev    = data[data.length - 2]?.[1];
     const change24 = prev ? ((latest - prev) / prev) * 100 : null;
 
-    // ATH = maior high de todos os dias
     let ath = 0, athIdx = 0;
     for (let i = 0; i < data.length; i++) {
-      const h = data[i][2] ?? data[i][1]; // fallback para close se não tiver high
+      const h = data[i][2] ?? data[i][1];
       if (h > ath) { ath = h; athIdx = i; }
     }
-    const athDate  = new Date(data[athIdx][0]).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
-    const fromAth  = ((latest - ath) / ath) * 100;
+    const athDate = new Date(data[athIdx][0]).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
+    const fromAth = ((latest - ath) / ath) * 100;
 
-    const oneYearAgo = Date.now() - 365 * 24 * 60 * 60 * 1000;
-    const yearEntry  = data.reduce((p, c) => Math.abs(c[0] - oneYearAgo) < Math.abs(p[0] - oneYearAgo) ? c : p);
-    const change1y   = ((latest - yearEntry[1]) / yearEntry[1]) * 100;
+    const oneYearAgo  = Date.now() - 365 * 24 * 60 * 60 * 1000;
+    const yearEntry   = data.reduce((p, c) => Math.abs(c[0] - oneYearAgo) < Math.abs(p[0] - oneYearAgo) ? c : p);
+    const change1y    = ((latest - yearEntry[1]) / yearEntry[1]) * 100;
 
     return { latest, change24, ath, athDate, fromAth, change1y };
   }, [data]);
@@ -263,7 +276,6 @@ export default function PriceChart({ data, loading, error }) {
 
   return (
     <div className="price-chart-wrapper">
-      {/* Header */}
       <div className="chart-header">
         <div className="chart-price-info">
           {stats.latest ? (
@@ -280,7 +292,6 @@ export default function PriceChart({ data, loading, error }) {
             <span className="price-placeholder">—</span>
           )}
         </div>
-
         <div className="chart-controls">
           <div className="period-selector">
             {PERIODS.map(p => (
@@ -288,19 +299,16 @@ export default function PriceChart({ data, loading, error }) {
                 key={p.label}
                 className={`period-btn ${activePeriod === p.label ? 'active' : ''}`}
                 onClick={() => setActivePeriod(p.label)}
-              >
-                {p.label}
-              </button>
+              >{p.label}</button>
             ))}
           </div>
           <div className="scale-toggle">
-            <button className={`scale-btn ${isLog ? 'active' : ''}`}    onClick={() => setIsLog(true)}>LOG</button>
-            <button className={`scale-btn ${!isLog ? 'active' : ''}`}   onClick={() => setIsLog(false)}>LINEAR</button>
+            <button className={`scale-btn ${isLog ? 'active' : ''}`}  onClick={() => setIsLog(true)}>LOG</button>
+            <button className={`scale-btn ${!isLog ? 'active' : ''}`} onClick={() => setIsLog(false)}>LINEAR</button>
           </div>
         </div>
       </div>
 
-      {/* Chart */}
       <div className="chart-area">
         {loading && (
           <div className="chart-state">
@@ -317,17 +325,11 @@ export default function PriceChart({ data, loading, error }) {
         {!loading && !error && (!data || data.length === 0) && (
           <div className="chart-state">
             <span>Sem dados disponíveis.</span>
-            <p>Execute <code>node scripts/fetch-history.mjs</code> na pasta <code>frontend/</code>.</p>
           </div>
         )}
-        <div
-          ref={chartRef}
-          className="echarts-canvas"
-          style={{ opacity: loading || error ? 0 : 1 }}
-        />
+        <div ref={chartRef} className="echarts-canvas" style={{ opacity: loading || error ? 0 : 1 }} />
       </div>
 
-      {/* Footer */}
       {data && data.length > 0 && (
         <div className="chart-footer">
           <span>{data.length.toLocaleString('pt-BR')} dias de dados</span>
@@ -338,9 +340,9 @@ export default function PriceChart({ data, loading, error }) {
             {new Date(data[data.length - 1][0]).toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })}
           </span>
           <span>·</span>
-          <span>Fonte: Yahoo Finance</span>
+          <span>Fonte: Yahoo Finance / CSV histórico</span>
           <span>·</span>
-          <span>Preço de fechamento diário (USD)</span>
+          <span>Fechamento diário (USD)</span>
         </div>
       )}
 
@@ -368,7 +370,6 @@ export default function PriceChart({ data, loading, error }) {
         .change-label { font-size: 10px; opacity: 0.7; margin-left: 2px; }
 
         .chart-controls { display: flex; align-items: center; gap: 10px; }
-
         .period-selector, .scale-toggle {
           display: flex; background: rgba(255,255,255,0.03);
           border: 1px solid var(--border-subtle); border-radius: 6px; overflow: hidden;
@@ -394,7 +395,7 @@ export default function PriceChart({ data, loading, error }) {
         }
         .chart-state.error { color: #ef4444; }
         .chart-state p { font-size: 11px; color: var(--text-muted); text-align: center; }
-        .chart-state code { background: rgba(255,255,255,0.06); padding: 1px 5px; border-radius: 3px; font-size: 11px; }
+        .chart-state code { background: rgba(255,255,255,0.06); padding: 1px 5px; border-radius: 3px; }
 
         .spinner {
           width: 24px; height: 24px; border: 2px solid var(--border-subtle);
