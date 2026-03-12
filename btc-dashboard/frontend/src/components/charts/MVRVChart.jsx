@@ -133,7 +133,8 @@ export default function MVRVChart({ mvrvData, loading, error }) {
   const chartRef  = useRef(null);
   const chartInst = useRef(null);
   const [isLog, setIsLog]               = useState(true);
-  const [colored, setColored]           = useState(false);
+  const [coloredPrice, setColoredPrice] = useState(true);   // preço colorido por padrão
+  const [coloredMvrv,  setColoredMvrv]  = useState(false);  // MVRV sem cor por padrão
   const [activePeriod, setActivePeriod] = useState('Todo');
   const [echartsReady, setEchartsReady] = useState(false);
   const [currentZoom, setCurrentZoom]   = useState({ start: 0, end: 100 });
@@ -157,14 +158,14 @@ export default function MVRVChart({ mvrvData, loading, error }) {
 
   // Séries coloridas — só recalcula quando dados ou colored mudam
   const coloredPriceSeries = useMemo(
-    () => colored ? buildColoredSegments(data, 0, 1) : [],
-    [data, colored]
+    () => coloredPrice ? buildColoredSegments(data, 0, 1) : [],
+    [data, coloredPrice]
   );
   // MVRV: sempre com área colorida, linha colorida só quando colored=true
   const mvrvAreaSeries  = useMemo(() => buildMvrvAreaSeries(data), [data]);
   const coloredMvrvLine = useMemo(
-    () => colored ? buildColoredSegments(data, 1, 3) : [],
-    [data, colored]
+    () => coloredMvrv ? buildColoredSegments(data, 1, 3) : [],
+    [data, coloredMvrv]
   );
 
   const buildOption = useCallback((zoom) => {
@@ -208,8 +209,8 @@ export default function MVRVChart({ mvrvData, loading, error }) {
       xAxisIndex: 0, yAxisIndex: 0,
       data: data.map(d => [new Date(d[0]).toISOString().split('T')[0], d[1]]),
       symbol: 'none', smooth: false,
-      lineStyle: { color: colored ? 'transparent' : '#f7931a', width: colored ? 0 : 1.5 },
-      areaStyle: colored ? undefined : {
+      lineStyle: { color: coloredPrice ? 'transparent' : '#f7931a', width: coloredPrice ? 0 : 1.5 },
+      areaStyle: coloredPrice ? undefined : {
         color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
           colorStops: [{ offset: 0, color: 'rgba(247,147,26,0.15)' }, { offset: 1, color: 'rgba(247,147,26,0)' }] }
       },
@@ -359,11 +360,20 @@ export default function MVRVChart({ mvrvData, loading, error }) {
         realizedSeries,
         baseMvrvSeries,
         ...mvrvAreaSeries,
-        ...(colored ? coloredPriceSeries : []),
+        // Linha cinza do MVRV quando sem cor
+        ...(!coloredMvrv ? [{
+          type: 'line', name: '__mvrv_gray__',
+          xAxisIndex: 1, yAxisIndex: 1,
+          data: data.map(d => [new Date(d[0]).toISOString().split('T')[0], d[3]]),
+          symbol: 'none', smooth: false,
+          lineStyle: { color: '#9090b0', width: 1.5 },
+          z: 3,
+        }] : []),
+        ...(coloredPrice ? coloredPriceSeries : []),
         ...coloredMvrvLine,
       ],
     };
-  }, [data, isLog, colored, zoomRange, coloredPriceSeries, mvrvAreaSeries, coloredMvrvLine]);
+  }, [data, isLog, coloredPrice, coloredMvrv, zoomRange, coloredPriceSeries, mvrvAreaSeries, coloredMvrvLine]);
 
   useEffect(() => {
     if (!echartsReady || !chartRef.current || !data.length) return;
@@ -396,7 +406,7 @@ export default function MVRVChart({ mvrvData, loading, error }) {
     if (!chart || !data.length) return;
     const option = buildOption(currentZoom);
     if (option) chart.setOption(option, { notMerge: false, replaceMerge: ['series'] });
-  }, [isLog, colored, zoomRange, currentZoom, buildOption]);
+  }, [isLog, coloredPrice, coloredMvrv, zoomRange, currentZoom, buildOption]);
 
   const latest      = data[data.length - 1];
   const latestColor = latest ? mvrvColor(latest[3]) : '#9090b0';
@@ -433,9 +443,15 @@ export default function MVRVChart({ mvrvData, loading, error }) {
             <button className={`scale-btn ${isLog ? 'active' : ''}`}   onClick={() => setIsLog(true)}>LOG</button>
             <button className={`scale-btn ${!isLog ? 'active' : ''}`}  onClick={() => setIsLog(false)}>LINEAR</button>
           </div>
-          <div className="toggle-group">
-            <button className={`scale-btn ${colored ? 'active' : ''}`}  onClick={() => setColored(true)}>COR</button>
-            <button className={`scale-btn ${!colored ? 'active' : ''}`} onClick={() => setColored(false)}>SEM COR</button>
+          <div className="toggle-group" title="Cor do gráfico de preços">
+            <span className="toggle-label">Preço</span>
+            <button className={`scale-btn ${coloredPrice ? 'active' : ''}`}  onClick={() => setColoredPrice(true)}>COR</button>
+            <button className={`scale-btn ${!coloredPrice ? 'active' : ''}`} onClick={() => setColoredPrice(false)}>SEM COR</button>
+          </div>
+          <div className="toggle-group" title="Cor do gráfico MVRV">
+            <span className="toggle-label">MVRV</span>
+            <button className={`scale-btn ${coloredMvrv ? 'active' : ''}`}  onClick={() => setColoredMvrv(true)}>COR</button>
+            <button className={`scale-btn ${!coloredMvrv ? 'active' : ''}`} onClick={() => setColoredMvrv(false)}>SEM COR</button>
           </div>
         </div>
       </div>
@@ -519,6 +535,11 @@ export default function MVRVChart({ mvrvData, loading, error }) {
           transition:color 0.15s, background 0.15s;
         }
         .period-btn:last-child, .scale-btn:last-child { border-right:none; }
+        .toggle-label {
+          padding:5px 7px; font-family:var(--font-mono); font-size:9px; font-weight:600;
+          letter-spacing:0.06em; color:var(--text-muted); text-transform:uppercase;
+          border-right:1px solid var(--border-subtle); user-select:none;
+        }
         .period-btn:hover, .scale-btn:hover { color:var(--text-primary); background:rgba(255,255,255,0.04); }
         .period-btn.active, .scale-btn.active { color:var(--brand-orange); background:rgba(247,147,26,0.1); }
         .chart-body { flex:1; display:flex; min-height:0; }
