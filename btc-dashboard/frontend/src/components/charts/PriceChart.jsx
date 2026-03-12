@@ -117,6 +117,15 @@ export default function PriceChart({ data, loading, error }) {
         lineStyle: { color: 'rgba(247,147,26,0.35)', type: 'dashed', width: 1 },
       }));
 
+    // Bounds para escala log baseados nos dados visíveis
+    const i0v = Math.floor((zoomRange.start / 100) * (data.length - 1));
+    const i1v = Math.ceil((zoomRange.end   / 100) * (data.length - 1));
+    const visiblePrices = data.slice(i0v, i1v + 1).map(d => d[1]).filter(v => v > 0);
+    const logBounds = isLog && visiblePrices.length ? {
+      min: Math.pow(10, Math.log10(Math.min(...visiblePrices)) - 0.1),
+      max: Math.pow(10, Math.log10(Math.max(...visiblePrices)) + 0.1),
+    } : { scale: true };
+
     return {
       backgroundColor: 'transparent',
       animation: false,
@@ -169,15 +178,6 @@ export default function PriceChart({ data, loading, error }) {
         splitLine: { show: false },
         boundaryGap: false,
       },
-
-      // Bounds para escala log baseados nos dados visíveis
-      const i0v = Math.floor((zoomRange.start / 100) * (data.length - 1));
-      const i1v = Math.ceil((zoomRange.end   / 100) * (data.length - 1));
-      const visiblePrices = data.slice(i0v, i1v + 1).map(d => d[1]).filter(v => v > 0);
-      const logBounds = isLog && visiblePrices.length ? {
-        min: Math.pow(10, Math.log10(Math.min(...visiblePrices)) - 0.1),
-        max: Math.pow(10, Math.log10(Math.max(...visiblePrices)) + 0.1),
-      } : { scale: true };
 
       yAxis: {
         type: isLog ? 'log' : 'value',
