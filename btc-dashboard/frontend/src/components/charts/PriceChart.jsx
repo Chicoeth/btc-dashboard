@@ -32,8 +32,9 @@ function formatPriceFull(value) {
   return '$' + value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function formatDateLabel(ts) {
-  return new Date(ts).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
+function formatDateTooltip(dateStr) {
+  const d = new Date(dateStr);
+  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
 export default function PriceChart({ data, loading, error }) {
@@ -65,35 +66,40 @@ export default function PriceChart({ data, loading, error }) {
     const timestamps = data.map(([ts]) => new Date(ts).toISOString().split('T')[0]);
     const closes     = data.map(([, c]) => c);
 
-    // Quantos dias ficam visíveis no zoom atual
+    // Quantos dias visíveis no zoom atual
     const spanDays = Math.round(((zoomRange.end - zoomRange.start) / 100) * timestamps.length);
 
-    // Formatter do eixo X: adapta granularidade ao zoom
+    // Formatter do eixo X adaptativo
     const xLabelFormatter = (val) => {
-      const d = new Date(val);
+      const d     = new Date(val);
       const month = d.getMonth();
       const year  = d.getFullYear();
+      const day   = d.getDate();
 
       if (spanDays > 365 * 3) {
-        // Visão ampla: só mostra ano, apenas em janeiro
+        // Visão longa (>3 anos): só ano, apenas em janeiro
         return month === 0 ? String(year) : '';
       } else if (spanDays > 180) {
-        // Visão média: mês abreviado a cada trimestre + ano em janeiro
-        if (month === 0) return String(year);
-        if (month % 3 === 0) return MONTHS_PT[month];
+        // Visão média (6m–3a): ano em jan, mês a cada trimestre
+        if (month === 0)      return String(year);
+        if (month % 3 === 0)  return MONTHS_PT[month];
         return '';
       } else if (spanDays > 60) {
-        // Visão mensal: todos os meses
+        // Visão mensal (2–6m): todos os meses
         return month === 0 ? String(year) : MONTHS_PT[month];
       } else {
-        // Visão semanal: semana e mês
-        const day = d.getDate();
-        if (day <= 7) return MONTHS_PT[month] + (month === 0 ? ' ' + year : '');
-        if (day <= 14) return '14';
-        if (day <= 21) return '21';
+        // Visão curta (<2m): dias + mês
+        if (day === 1) return MONTHS_PT[month] + (month === 0 ? '\n' + year : '');
+        if ([8, 15, 22].includes(day)) return String(day);
         return '';
       }
     };
+
+    // Intervalo de labels no eixo X
+    const xInterval = spanDays > 365 * 3 ? Math.floor(timestamps.length / 16)
+                    : spanDays > 180     ? Math.floor(spanDays / 6)
+                    : spanDays > 60      ? Math.floor(spanDays / 7)
+                    : 'auto';
 
     const halvingLines = HALVINGS
       .filter(h => timestamps.includes(h.date))
@@ -115,12 +121,15 @@ export default function PriceChart({ data, loading, error }) {
       backgroundColor: 'transparent',
       animation: false,
       grid: { top: 20, left: 68, right: 24, bottom: 80 },
+
       tooltip: {
         trigger: 'axis',
         axisPointer: {
-          type: 'cross',
-          crossStyle: { color: '#3d3d6b' },
-          lineStyle: { color: '#3d3d6b' },
+          type: 'line',
+          // Só linha horizontal (snap ao valor), sem linha vertical
+          lineStyle: { color: 'rgba(255,255,255,0.15)', width: 1, type: 'dashed' },
+          // Desabilita o label do eixo Y (o número flutuante à esquerda)
+          label: { show: false },
         },
         backgroundColor: '#111120',
         borderColor: '#252540',
@@ -130,17 +139,18 @@ export default function PriceChart({ data, loading, error }) {
         formatter(params) {
           const p = params[0];
           if (!p) return '';
-          const halving = HALVINGS.find(h => h.date === p.axisValue);
+          const halving    = HALVINGS.find(h => h.date === p.axisValue);
           const halvingNote = halving
-            ? `<div style="color:#f7931a;font-size:11px;margin-top:4px;font-family:JetBrains Mono,monospace">⬡ ${halving.label} · ${halving.reward}</div>`
+            ? `<div style="color:#f7931a;font-size:11px;margin-top:6px;font-family:JetBrains Mono,monospace">⬡ ${halving.label} · ${halving.reward}</div>`
             : '';
           return `
-            <div style="font-family:JetBrains Mono,monospace;font-size:11px;color:#9090b0;margin-bottom:5px">${formatDateLabel(new Date(p.axisValue).getTime())}</div>
-            <div style="font-size:16px;font-weight:600;color:#e8e8f0">${formatPriceFull(p.value)}</div>
+            <div style="font-family:JetBrains Mono,monospace;font-size:11px;color:#9090b0;margin-bottom:4px">${formatDateTooltip(p.axisValue)}</div>
+            <div style="font-size:17px;font-weight:700;color:#e8e8f0;letter-spacing:-0.02em">${formatPriceFull(p.value)}</div>
             ${halvingNote}
           `;
         },
       },
+
       xAxis: {
         type: 'category',
         data: timestamps,
@@ -153,21 +163,17 @@ export default function PriceChart({ data, loading, error }) {
           margin: 10,
           showMinLabel: true,
           showMaxLabel: false,
+          interval: xInterval,
           formatter: xLabelFormatter,
-          // Intervalo automático baseado no span
-          interval: spanDays > 365 * 3 ? Math.floor(timestamps.length / 14)
-                  : spanDays > 180     ? Math.floor(spanDays / 5)
-                  : spanDays > 60      ? Math.floor(spanDays / 6)
-                  : 'auto',
         },
         splitLine: { show: false },
         boundaryGap: false,
       },
+
       yAxis: {
         type: isLog ? 'log' : 'value',
         logBase: 10,
-        // scale:true faz o eixo Y ajustar ao range visível automaticamente
-        scale: true,
+        scale: true, // ajusta eixo Y ao range visível automaticamente
         axisLine: { show: false },
         axisTick: { show: false },
         axisLabel: {
@@ -178,6 +184,7 @@ export default function PriceChart({ data, loading, error }) {
         },
         splitLine: { lineStyle: { color: '#1e1e35', type: 'dashed' } },
       },
+
       dataZoom: [
         {
           type: 'slider',
@@ -209,6 +216,7 @@ export default function PriceChart({ data, loading, error }) {
           end: zoomRange.end,
         },
       ],
+
       series: [{
         type: 'line',
         data: closes,
@@ -250,11 +258,11 @@ export default function PriceChart({ data, loading, error }) {
     init();
   }, [echartsReady, chartOption]);
 
-  // Stats — ATH usa high (índice 2)
+  // Stats — ATH usa high (índice 2), com fallback para close
   const stats = useMemo(() => {
     if (!data || data.length === 0) return {};
-    const latest  = data[data.length - 1][1];
-    const prev    = data[data.length - 2]?.[1];
+    const latest   = data[data.length - 1][1];
+    const prev     = data[data.length - 2]?.[1];
     const change24 = prev ? ((latest - prev) / prev) * 100 : null;
 
     let ath = 0, athIdx = 0;
@@ -262,12 +270,12 @@ export default function PriceChart({ data, loading, error }) {
       const h = data[i][2] ?? data[i][1];
       if (h > ath) { ath = h; athIdx = i; }
     }
-    const athDate = new Date(data[athIdx][0]).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
-    const fromAth = ((latest - ath) / ath) * 100;
+    const athDate  = new Date(data[athIdx][0]).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
+    const fromAth  = ((latest - ath) / ath) * 100;
 
-    const oneYearAgo  = Date.now() - 365 * 24 * 60 * 60 * 1000;
-    const yearEntry   = data.reduce((p, c) => Math.abs(c[0] - oneYearAgo) < Math.abs(p[0] - oneYearAgo) ? c : p);
-    const change1y    = ((latest - yearEntry[1]) / yearEntry[1]) * 100;
+    const oneYearAgo = Date.now() - 365 * 24 * 60 * 60 * 1000;
+    const yearEntry  = data.reduce((p, c) => Math.abs(c[0] - oneYearAgo) < Math.abs(p[0] - oneYearAgo) ? c : p);
+    const change1y   = ((latest - yearEntry[1]) / yearEntry[1]) * 100;
 
     return { latest, change24, ath, athDate, fromAth, change1y };
   }, [data]);
@@ -323,9 +331,7 @@ export default function PriceChart({ data, loading, error }) {
           </div>
         )}
         {!loading && !error && (!data || data.length === 0) && (
-          <div className="chart-state">
-            <span>Sem dados disponíveis.</span>
-          </div>
+          <div className="chart-state"><span>Sem dados disponíveis.</span></div>
         )}
         <div ref={chartRef} className="echarts-canvas" style={{ opacity: loading || error ? 0 : 1 }} />
       </div>
@@ -348,7 +354,6 @@ export default function PriceChart({ data, loading, error }) {
 
       <style jsx>{`
         .price-chart-wrapper { display: flex; flex-direction: column; height: 100%; }
-
         .chart-header {
           display: flex; align-items: center; justify-content: space-between;
           padding: 16px 20px 12px; border-bottom: 1px solid var(--border-subtle);
@@ -361,14 +366,12 @@ export default function PriceChart({ data, loading, error }) {
         }
         .price-placeholder { font-family: var(--font-mono); font-size: 20px; color: var(--text-muted); }
         .price-change {
-          display: flex; align-items: center; gap: 4px;
-          font-family: var(--font-mono); font-size: 13px; font-weight: 500;
-          padding: 3px 8px; border-radius: 4px;
+          display: flex; align-items: center; gap: 4px; font-family: var(--font-mono);
+          font-size: 13px; font-weight: 500; padding: 3px 8px; border-radius: 4px;
         }
         .price-change.up   { color: #22c55e; background: rgba(34,197,94,0.1); }
         .price-change.down { color: #ef4444; background: rgba(239,68,68,0.1); }
         .change-label { font-size: 10px; opacity: 0.7; margin-left: 2px; }
-
         .chart-controls { display: flex; align-items: center; gap: 10px; }
         .period-selector, .scale-toggle {
           display: flex; background: rgba(255,255,255,0.03);
@@ -384,10 +387,8 @@ export default function PriceChart({ data, loading, error }) {
         .period-btn:hover, .scale-btn:hover { color: var(--text-primary); background: rgba(255,255,255,0.04); }
         .period-btn.active, .scale-btn.active { color: var(--brand-orange); background: rgba(247,147,26,0.1); }
         .scale-btn { letter-spacing: 0.06em; font-size: 10px; }
-
         .chart-area { flex: 1; position: relative; min-height: 420px; }
         .echarts-canvas { width: 100%; height: 100%; min-height: 420px; transition: opacity 0.3s ease; }
-
         .chart-state {
           position: absolute; inset: 0; display: flex; flex-direction: column;
           align-items: center; justify-content: center; gap: 12px;
@@ -396,14 +397,12 @@ export default function PriceChart({ data, loading, error }) {
         .chart-state.error { color: #ef4444; }
         .chart-state p { font-size: 11px; color: var(--text-muted); text-align: center; }
         .chart-state code { background: rgba(255,255,255,0.06); padding: 1px 5px; border-radius: 3px; }
-
         .spinner {
           width: 24px; height: 24px; border: 2px solid var(--border-subtle);
           border-top-color: var(--brand-orange); border-radius: 50%;
           animation: spin 0.8s linear infinite;
         }
         @keyframes spin { to { transform: rotate(360deg); } }
-
         .chart-footer {
           display: flex; align-items: center; gap: 8px; padding: 10px 20px;
           border-top: 1px solid var(--border-subtle); font-family: var(--font-mono);
