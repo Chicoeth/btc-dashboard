@@ -1,10 +1,12 @@
 node_modules/
 .next/
 dist/
-data/
 logs/
 .env
 .env.local
 *.db
 *.db-shm
 *.db-wal
+
+# NÃO ignorar public/data — os JSONs de dados precisam ir pro GitHub/Vercel
+# data/   <-- removido
