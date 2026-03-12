@@ -9,17 +9,14 @@ import { useEffect, useRef, useMemo, useState } from 'react';
 
 // Converte valor 0–100 em cor RGB viva
 function fngColor(value, alpha = 1) {
-  // 0=vermelho puro, 50=amarelo, 100=verde vivo
   const v = Math.max(0, Math.min(100, value));
   let r, g, b;
   if (v <= 50) {
-    // vermelho (#e8000a) → amarelo (#f5c400)
     const t = v / 50;
     r = Math.round(232 + (245 - 232) * t);
     g = Math.round(0   + (196 - 0)   * t);
     b = Math.round(10  + (0   - 10)  * t);
   } else {
-    // amarelo (#f5c400) → verde (#00c44f)
     const t = (v - 50) / 50;
     r = Math.round(245 + (0   - 245) * t);
     g = Math.round(196 + (196 - 196) * t);
@@ -41,7 +38,6 @@ function fmtDate(ts) {
 }
 
 const MONTHS_PT = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
-
 const PERIODS = [
   { label: '1A', months: 12 },
   { label: '2A', months: 24 },
@@ -49,8 +45,6 @@ const PERIODS = [
   { label: '5A', months: 60 },
   { label: 'Todo', months: null },
 ];
-
-// Gradient legend steps
 const LEGEND_STEPS = [100,90,80,70,60,50,40,30,20,10,0];
 
 export default function FearGreedChart({ priceData, fngData, loading, error }) {
@@ -95,8 +89,8 @@ export default function FearGreedChart({ priceData, fngData, loading, error }) {
   const chartOption = useMemo(() => {
     if (!merged.length) return null;
 
-    const dates  = merged.map(d => d.date);
-    const closes = merged.map(d => d.close);
+    const dates   = merged.map(d => d.date);
+    const closes  = merged.map(d => d.close);
     const fngVals = merged.map(d => d.fng);
 
     const spanDays = Math.round(((zoomRange.end - zoomRange.start) / 100) * dates.length);
@@ -114,22 +108,38 @@ export default function FearGreedChart({ priceData, fngData, loading, error }) {
                     : spanDays > 60    ? Math.floor(spanDays/7)
                     : 'auto';
 
-    // Build colored price series: each segment gets its color
-    // Use piecewise color via itemStyle per-point on scatter/custom, or
-    // use multiple line segments. Simplest: use markArea colored bands isn't practical.
-    // Best approach: series of individual colored points + connecting lines using
-    // a single series with lineStyle color function — ECharts doesn't support per-point
-    // line color natively, so we use a custom series of polyline segments.
-    // Practical solution: build N series of length 2 each is too slow.
-    // Best practical: use one series with visualMap on the fng value array.
+    // Build colored price series using visualMap on the fng value (dim 1 of dataset)
+    // We use a dataset with [date, close, fngVal] and map visualMap on dim 2
+    const priceDataset = merged.map(d => [d.date, d.close, d.fng]);
 
     return {
       backgroundColor: 'transparent',
       animation: false,
+      dataset: [{ source: priceDataset }],
       grid: [
-        { top: 16, left: 68, right: 24, bottom: '44%' },    // price
-        { top: '62%', left: 68, right: 24, bottom: 80 },    // fng line
+        { top: 16, left: 68, right: 24, bottom: '44%' },
+        { top: '60%', left: 68, right: 24, bottom: 80 },
       ],
+
+      // VisualMap on dim 2 (fng value) to color the price line
+      visualMap: colored ? [{
+        show: false,
+        seriesIndex: 0,
+        dimension: 2,
+        min: 0,
+        max: 100,
+        inRange: {
+          color: [
+            '#e8000a',  // 0   — Extreme Fear
+            '#e8000a',  // 10
+            '#f07000',  // 25  — Fear
+            '#f5c400',  // 50  — Neutral
+            '#80c400',  // 75  — Greed
+            '#00c44f',  // 100 — Extreme Greed
+          ],
+        },
+      }] : [],
+
       tooltip: {
         trigger: 'axis',
         axisPointer: {
@@ -142,43 +152,30 @@ export default function FearGreedChart({ priceData, fngData, loading, error }) {
         borderWidth: 1,
         padding: [10, 14],
         formatter(params) {
-          const price = params.find(p => p.seriesIndex === 0);
-          const fng   = params.find(p => p.seriesIndex === 1);
-          if (!price) return '';
-          const fngVal = fng?.value ?? fngVals[price.dataIndex];
-          const color  = fngColor(fngVal);
-          const row    = merged[price.dataIndex];
+          // params[0] = price series, params[1] = fng line series
+          const priceParam = params.find(p => p.seriesIndex === 0);
+          const fngParam   = params.find(p => p.seriesIndex === 1);
+          if (!priceParam) return '';
+
+          const idx     = priceParam.dataIndex;
+          const row     = merged[idx];
+          const fngVal  = row?.fng ?? fngParam?.value;
+          const color   = fngColor(fngVal);
+
           return `
-            <div style="font-family:JetBrains Mono,monospace;font-size:11px;color:#9090b0;margin-bottom:5px">${fmtDate(new Date(price.axisValue).getTime())}</div>
-            <div style="font-size:16px;font-weight:700;color:#e8e8f0;margin-bottom:6px">${formatPriceFull(price.value)}</div>
+            <div style="font-family:JetBrains Mono,monospace;font-size:11px;color:#9090b0;margin-bottom:5px">${fmtDate(new Date(priceParam.axisValue).getTime())}</div>
+            <div style="font-size:16px;font-weight:700;color:#e8e8f0;margin-bottom:6px">${formatPriceFull(row?.close ?? priceParam.value)}</div>
             <div style="display:flex;align-items:center;gap:6px">
-              <span style="width:10px;height:10px;border-radius:50%;background:${color};display:inline-block;flex-shrink:0"></span>
+              <span style="width:9px;height:9px;border-radius:50%;background:${color};display:inline-block;flex-shrink:0"></span>
               <span style="font-family:JetBrains Mono,monospace;font-size:12px;color:${color};font-weight:600">${fngVal} — ${row?.cls ?? ''}</span>
             </div>
           `;
         },
       },
 
-      // VisualMap drives color of the price series
-      visualMap: colored ? [{
-        show: false,
-        seriesIndex: 0,
-        dimension: 1,   // map the y-value's companion (we'll use a trick)
-        min: 0,
-        max: 100,
-        inRange: {
-          color: [
-            '#e8000a', // 0
-            '#e8000a',
-            '#f5c400', // 50
-            '#00c44f', // 100
-          ],
-        },
-      }] : [],
-
       xAxis: [
         {
-          type: 'category', data: dates, gridIndex: 0,
+          type: 'category', gridIndex: 0,
           axisLine: { lineStyle: { color: '#1e1e35' } },
           axisTick: { show: false },
           axisLabel: { show: false },
@@ -202,6 +199,13 @@ export default function FearGreedChart({ priceData, fngData, loading, error }) {
         {
           type: isLog ? 'log' : 'value', logBase: 10, scale: true,
           gridIndex: 0,
+          name: 'Preço BTC (USD)',
+          nameLocation: 'middle',
+          nameGap: 52,
+          nameTextStyle: {
+            color: '#5a5a80', fontFamily: 'JetBrains Mono, monospace',
+            fontSize: 9, letterSpacing: 1,
+          },
           axisLine: { show: false }, axisTick: { show: false },
           axisLabel: { color: '#5a5a80', fontFamily: 'JetBrains Mono, monospace', fontSize: 10, formatter: formatPrice },
           splitLine: { lineStyle: { color: '#1e1e35', type: 'dashed' } },
@@ -209,6 +213,13 @@ export default function FearGreedChart({ priceData, fngData, loading, error }) {
         {
           type: 'value', min: 0, max: 100,
           gridIndex: 1,
+          name: 'Medo & Ganância',
+          nameLocation: 'middle',
+          nameGap: 52,
+          nameTextStyle: {
+            color: '#5a5a80', fontFamily: 'JetBrains Mono, monospace',
+            fontSize: 9, letterSpacing: 1,
+          },
           axisLine: { show: false }, axisTick: { show: false },
           axisLabel: { color: '#5a5a80', fontFamily: 'JetBrains Mono, monospace', fontSize: 10 },
           splitLine: { lineStyle: { color: '#1e1e35', type: 'dashed' } },
@@ -239,23 +250,24 @@ export default function FearGreedChart({ priceData, fngData, loading, error }) {
 
       series: [
         {
-          // Price series — colored by F&G via visualMap
-          // Trick: use a 2D dataset where dim0=close, dim1=fngVal so visualMap maps on dim1
+          // Price — uses dataset dim0=date, dim1=close, dim2=fng; visualMap colors by dim2
           type: 'line',
+          datasetIndex: 0,
           xAxisIndex: 0, yAxisIndex: 0,
-          data: merged.map(d => ({ value: [d.date, d.close, d.fng] })),
           encode: { x: 0, y: 1 },
           smooth: false, symbol: 'none',
           lineStyle: { width: 1.5 },
-          areaStyle: colored ? undefined : {
-            color: { type:'linear', x:0,y:0,x2:0,y2:1,
-              colorStops:[{offset:0,color:'rgba(247,147,26,0.15)'},{offset:1,color:'rgba(247,147,26,0)'}] }
-          },
-          // When not colored, use orange
-          ...(colored ? {} : { lineStyle: { color: '#f7931a', width: 1.5 } }),
+          // When not colored, fallback to orange
+          ...(colored ? {} : {
+            lineStyle: { color: '#f7931a', width: 1.5 },
+            areaStyle: {
+              color: { type:'linear', x:0,y:0,x2:0,y2:1,
+                colorStops:[{offset:0,color:'rgba(247,147,26,0.15)'},{offset:1,color:'rgba(247,147,26,0)'}] }
+            },
+          }),
         },
         {
-          // F&G line
+          // F&G line — secondary grid
           type: 'line',
           xAxisIndex: 1, yAxisIndex: 1,
           data: fngVals,
@@ -270,33 +282,8 @@ export default function FearGreedChart({ priceData, fngData, loading, error }) {
     };
   }, [merged, isLog, colored, zoomRange]);
 
-  // When colored, we need to paint each segment manually since ECharts visualMap
-  // on line series uses the y-value, not a separate dimension.
-  // Better approach: use custom rendering with canvas after chart renders.
-  // Actually the cleanest ECharts approach: use a dataset + visualMap on dimension 2.
-  // Let's fix the visualMap to use dimension 2 (the fng value).
-  const finalOption = useMemo(() => {
-    if (!chartOption) return null;
-    if (!colored) return chartOption;
-    // Fix visualMap to map on the fng dimension (index 2 of the value array)
-    return {
-      ...chartOption,
-      visualMap: [{
-        show: false,
-        seriesIndex: 0,
-        dimension: 2,
-        min: 0,
-        max: 100,
-        inRange: {
-          color: ['#e8000a','#e8000a','#f5c400','#00c44f'],
-          colorLightness: [0, 0, 0, 0],
-        },
-      }],
-    };
-  }, [chartOption, colored]);
-
   useEffect(() => {
-    if (!echartsReady || !chartRef.current || !finalOption) return;
+    if (!echartsReady || !chartRef.current || !chartOption) return;
     const init = async () => {
       const echarts = await import('echarts');
       let chart = chartInst.current;
@@ -305,13 +292,12 @@ export default function FearGreedChart({ priceData, fngData, loading, error }) {
         chartInst.current = chart;
         new ResizeObserver(() => chart.resize()).observe(chartRef.current);
       }
-      chart.setOption(finalOption, { notMerge: true });
+      chart.setOption(chartOption, { notMerge: true });
     };
     init();
-  }, [echartsReady, finalOption]);
+  }, [echartsReady, chartOption]);
 
-  // Latest stats
-  const latest = merged[merged.length - 1];
+  const latest      = merged[merged.length - 1];
   const latestColor = latest ? fngColor(latest.fng) : '#9090b0';
 
   return (
@@ -322,7 +308,11 @@ export default function FearGreedChart({ priceData, fngData, loading, error }) {
           {latest && (
             <>
               <span className="price-display">{formatPriceFull(latest.close)}</span>
-              <span className="fng-badge" style={{ color: latestColor, background: fngColor(latest.fng, 0.12), borderColor: fngColor(latest.fng, 0.3) }}>
+              <span className="fng-badge" style={{
+                color: latestColor,
+                background: fngColor(latest.fng, 0.12),
+                borderColor: fngColor(latest.fng, 0.3),
+              }}>
                 {latest.fng} · {latest.cls}
               </span>
             </>
@@ -331,7 +321,8 @@ export default function FearGreedChart({ priceData, fngData, loading, error }) {
         <div className="chart-controls">
           <div className="period-selector">
             {PERIODS.map(p => (
-              <button key={p.label} className={`period-btn ${activePeriod===p.label?'active':''}`}
+              <button key={p.label}
+                className={`period-btn ${activePeriod===p.label?'active':''}`}
                 onClick={() => setActivePeriod(p.label)}>{p.label}</button>
             ))}
           </div>
@@ -356,7 +347,8 @@ export default function FearGreedChart({ priceData, fngData, loading, error }) {
               {!loading && !error && !merged.length && <span>Sem dados. Execute <code>node scripts/fetch-fng.mjs</code></span>}
             </div>
           )}
-          <div ref={chartRef} className="echarts-canvas" style={{ opacity: loading||error||!merged.length ? 0 : 1 }} />
+          <div ref={chartRef} className="echarts-canvas"
+            style={{ opacity: loading||error||!merged.length ? 0 : 1 }} />
         </div>
 
         {/* Color scale legend */}
@@ -375,7 +367,11 @@ export default function FearGreedChart({ priceData, fngData, loading, error }) {
         <div className="chart-footer">
           <span>{merged.length.toLocaleString('pt-BR')} dias de dados</span>
           <span>·</span>
-          <span>{new Date(merged[0].ts).toLocaleDateString('pt-BR',{month:'short',year:'numeric'})} → {new Date(merged[merged.length-1].ts).toLocaleDateString('pt-BR',{month:'short',year:'numeric'})}</span>
+          <span>
+            {new Date(merged[0].ts).toLocaleDateString('pt-BR',{month:'short',year:'numeric'})}
+            {' → '}
+            {new Date(merged[merged.length-1].ts).toLocaleDateString('pt-BR',{month:'short',year:'numeric'})}
+          </span>
           <span>·</span>
           <span>Fonte: alternative.me / Yahoo Finance</span>
         </div>
@@ -396,8 +392,7 @@ export default function FearGreedChart({ priceData, fngData, loading, error }) {
         }
         .fng-badge {
           font-family:var(--font-mono); font-size:12px; font-weight:600;
-          padding:3px 10px; border-radius:20px; border:1px solid;
-          letter-spacing:0.03em;
+          padding:3px 10px; border-radius:20px; border:1px solid; letter-spacing:0.03em;
         }
 
         .chart-controls { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
@@ -416,8 +411,8 @@ export default function FearGreedChart({ priceData, fngData, loading, error }) {
         .period-btn.active, .scale-btn.active { color:var(--brand-orange); background:rgba(247,147,26,0.1); }
 
         .chart-body { flex:1; display:flex; min-height:0; }
-        .chart-area { flex:1; position:relative; min-height:500px; }
-        .echarts-canvas { width:100%; height:100%; min-height:500px; transition:opacity 0.3s; }
+        .chart-area { flex:1; position:relative; min-height:520px; }
+        .echarts-canvas { width:100%; height:100%; min-height:520px; transition:opacity 0.3s; }
 
         .chart-state {
           position:absolute; inset:0; display:flex; flex-direction:column;
@@ -431,18 +426,13 @@ export default function FearGreedChart({ priceData, fngData, loading, error }) {
         }
         @keyframes spin { to { transform:rotate(360deg); } }
 
-        /* Vertical color scale legend */
         .legend {
           display:flex; flex-direction:row; align-items:stretch;
           padding:16px 12px 80px 8px; gap:4px;
         }
         .legend-bar {
           width:10px; border-radius:5px; flex-shrink:0;
-          background:linear-gradient(to bottom,
-            #00c44f 0%,
-            #f5c400 50%,
-            #e8000a 100%
-          );
+          background:linear-gradient(to bottom, #00c44f 0%, #f5c400 50%, #e8000a 100%);
         }
         .legend-labels {
           display:flex; flex-direction:column; justify-content:space-between;
