@@ -328,18 +328,17 @@ export default function FearGreedChart({ priceData, fngData, loading, error }) {
         chartInst.current = chart;
         new ResizeObserver(() => chart.resize()).observe(chartRef.current);
 
-        // Listen to zoom events to update log scale bounds
-        chart.on('datazoom', (evt) => {
-          const option = chart.getOption();
-          const dz = option.dataZoom?.[0];
-          if (dz) {
-            const start = dz.start ?? 0;
-            const end   = dz.end   ?? 100;
-            setCurrentZoom({ start, end });
-            // Re-apply option with new bounds
-            const newOpt = buildOption({ start, end });
-            if (newOpt) chart.setOption(newOpt, { notMerge: false });
-          }
+        // Listen to zoom — only update state (React re-render handles the rest)
+        let zoomTimer = null;
+        chart.on('datazoom', () => {
+          const opt = chart.getOption();
+          const dz  = opt?.dataZoom?.[0];
+          if (!dz) return;
+          const start = dz.start ?? 0;
+          const end   = dz.end   ?? 100;
+          // Debounce: only recalc log bounds after user stops dragging
+          clearTimeout(zoomTimer);
+          zoomTimer = setTimeout(() => setCurrentZoom({ start, end }), 150);
         });
       }
       const option = buildOption(zoomRange);
@@ -347,15 +346,16 @@ export default function FearGreedChart({ priceData, fngData, loading, error }) {
       setCurrentZoom(zoomRange);
     };
     init();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [echartsReady, merged.length]);
 
-  // Update when settings change
+  // Update when settings/zoom change — notMerge:false is faster for partial updates
   useEffect(() => {
     const chart = chartInst.current;
     if (!chart || !merged.length) return;
     const option = buildOption(currentZoom);
-    if (option) chart.setOption(option, { notMerge: true });
-  }, [isLog, colored, zoomRange, coloredSeries]);
+    if (option) chart.setOption(option, { notMerge: false, replaceMerge: ['series'] });
+  }, [isLog, colored, zoomRange, coloredSeries, currentZoom]);
 
   const latest      = merged[merged.length - 1];
   const latestColor = latest ? fngColor(latest.fng) : '#9090b0';

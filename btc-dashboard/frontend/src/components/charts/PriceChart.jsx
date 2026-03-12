@@ -3,7 +3,7 @@
  * Formato de dados: [[timestamp_ms, close, high], ...]
  */
 
-import { useEffect, useRef, useMemo, useState } from 'react';
+import { useEffect, useRef, useMemo, useState, useCallback } from 'react';
 
 const HALVINGS = [
   { date: '2012-11-28', label: '1º Halving', reward: '25 BTC' },
@@ -43,6 +43,7 @@ export default function PriceChart({ data, loading, error }) {
   const [isLog, setIsLog]               = useState(true);
   const [activePeriod, setActivePeriod] = useState('Todo');
   const [echartsReady, setEchartsReady] = useState(false);
+  const [currentZoom, setCurrentZoom]   = useState({ start: 0, end: 100 });
 
   useEffect(() => {
     import('echarts').then(() => setEchartsReady(true));
@@ -118,8 +119,9 @@ export default function PriceChart({ data, loading, error }) {
       }));
 
     // Bounds para escala log baseados nos dados visíveis
-    const i0v = Math.floor((zoomRange.start / 100) * (data.length - 1));
-    const i1v = Math.ceil((zoomRange.end   / 100) * (data.length - 1));
+    const activeZoom = currentZoom;
+    const i0v = Math.floor((activeZoom.start / 100) * (data.length - 1));
+    const i1v = Math.ceil((activeZoom.end   / 100) * (data.length - 1));
     const visiblePrices = data.slice(i0v, i1v + 1).map(d => d[1]).filter(v => v > 0);
     const logBounds = isLog && visiblePrices.length ? {
       min: Math.pow(10, Math.log10(Math.min(...visiblePrices)) - 0.1),
@@ -251,21 +253,41 @@ export default function PriceChart({ data, loading, error }) {
   }, [data, isLog, zoomRange]);
 
   // Init / update chart
+  // Wrap option building in a ref-stable function for zoom handler
+  const buildOptionRef = useRef(null);
+  buildOptionRef.current = chartOption;
+
   useEffect(() => {
-    if (!echartsReady || !chartRef.current || !chartOption) return;
+    if (!echartsReady || !chartRef.current || !data?.length) return;
     const init = async () => {
       const echarts = await import('echarts');
       let chart = chartInst.current;
       if (!chart) {
         chart = echarts.init(chartRef.current, null, { renderer: 'canvas' });
         chartInst.current = chart;
-        const ro = new ResizeObserver(() => chart.resize());
-        ro.observe(chartRef.current);
+        new ResizeObserver(() => chart.resize()).observe(chartRef.current);
+
+        // Listen to zoom — update log bounds without full re-render
+        chart.on('datazoom', () => {
+          const opt = chart.getOption();
+          const dz  = opt?.dataZoom?.[0];
+          if (!dz) return;
+          const start = dz.start ?? 0;
+          const end   = dz.end   ?? 100;
+          setCurrentZoom({ start, end });
+        });
       }
-      chart.setOption(chartOption, { notMerge: true });
+      if (chartOption) chart.setOption(chartOption, { notMerge: true });
     };
     init();
-  }, [echartsReady, chartOption]);
+  }, [echartsReady, data?.length]);
+
+  // Re-apply option when it changes (settings, zoom, log/linear)
+  useEffect(() => {
+    const chart = chartInst.current;
+    if (!chart || !chartOption) return;
+    chart.setOption(chartOption, { notMerge: false });
+  }, [chartOption]);
 
   // Stats — ATH usa high (índice 2), com fallback para close
   const stats = useMemo(() => {
