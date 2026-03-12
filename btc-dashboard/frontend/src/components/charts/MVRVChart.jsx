@@ -13,7 +13,7 @@ import { useEffect, useRef, useMemo, useState, useCallback } from 'react';
 
 // Escala de cor: verde abaixo de 1, vermelho acima de 2.5
 const COLOR_MIN = 1.0;
-const COLOR_MAX = 2.5;
+const COLOR_MAX = 3.0;
 
 function mvrvColor(value, alpha = 1) {
   const t = Math.max(0, Math.min(1, (value - COLOR_MIN) / (COLOR_MAX - COLOR_MIN)));
@@ -56,7 +56,7 @@ const PERIODS = [
 ];
 
 // Legenda lateral: de vermelho (2.5+) até verde (<1)
-const LEGEND_VALUES = [2.5, 2.0, 1.5, 1.0, 0.5];
+const LEGEND_VALUES = [4.0, 3.5, 3.0, 2.5, 2.0, 1.5, 1.0, 0.5, 0.0];
 
 // Quebra série de preço em segmentos coloridos por MVRV
 function buildColoredSegments(data, gridIndex, valueIndex) {
@@ -92,13 +92,47 @@ function buildColoredSegments(data, gridIndex, valueIndex) {
     }
   }
   return series;
+
+// Série de área colorida do MVRV — sempre visível (independe do toggle COR)
+// Linha transparente, apenas preenchimento sutil colorido
+function buildMvrvAreaSeries(data) {
+  if (!data.length) return [];
+  const THRESHOLD = 0.06;
+  const series = [];
+  let segStart = 0;
+
+  for (let i = 1; i <= data.length; i++) {
+    const ended = i === data.length || Math.abs(data[i]?.[3] - data[i-1][3]) > THRESHOLD;
+    if (ended) {
+      const start = segStart > 0 ? segStart - 1 : segStart;
+      if (i - start >= 2) {
+        const avgMvrv = Array.from({length: i - start}, (_, k) => data[start + k][3])
+          .reduce((s, v) => s + v, 0) / (i - start);
+        series.push({
+          type: 'line',
+          xAxisIndex: 1, yAxisIndex: 1,
+          data: Array.from({length: i - start}, (_, k) => [
+            new Date(data[start + k][0]).toISOString().split('T')[0],
+            data[start + k][3],
+          ]),
+          smooth: false, symbol: 'none',
+          lineStyle: { color: 'transparent', width: 0 },
+          areaStyle: { color: mvrvColor(avgMvrv, 0.10) },
+          silent: true, emphasis: { disabled: true },
+          z: 2,
+        });
+      }
+      segStart = i - 1;
+    }
+  }
+  return series;
 }
 
 export default function MVRVChart({ mvrvData, loading, error }) {
   const chartRef  = useRef(null);
   const chartInst = useRef(null);
   const [isLog, setIsLog]               = useState(true);
-  const [colored, setColored]           = useState(true);
+  const [colored, setColored]           = useState(false);
   const [activePeriod, setActivePeriod] = useState('Todo');
   const [echartsReady, setEchartsReady] = useState(false);
   const [currentZoom, setCurrentZoom]   = useState({ start: 0, end: 100 });
@@ -125,9 +159,11 @@ export default function MVRVChart({ mvrvData, loading, error }) {
     () => colored ? buildColoredSegments(data, 0, 1) : [],
     [data, colored]
   );
-  const coloredMvrvSeries = useMemo(
-    () => buildColoredSegments(data, 1, 3),
-    [data]
+  // MVRV: sempre com área colorida, linha colorida só quando colored=true
+  const mvrvAreaSeries  = useMemo(() => buildMvrvAreaSeries(data), [data]);
+  const coloredMvrvLine = useMemo(
+    () => colored ? buildColoredSegments(data, 1, 3) : [],
+    [data, colored]
   );
 
   const buildOption = useCallback((zoom) => {
@@ -204,7 +240,7 @@ export default function MVRVChart({ mvrvData, loading, error }) {
           fontFamily: 'JetBrains Mono, monospace', fontSize: 9,
           color: 'rgba(0,196,79,0.7)', position: 'insideStartTop',
         },
-        data: [{ yAxis: 1.0, name: '1.0', label: { formatter: '1.0 · Fundo histórico' } }],
+        data: [{ yAxis: 1.0, name: '1.0', label: { formatter: '1.0 · Fundo histórico', position: 'insideEndBottom' } }],
       },
     };
 
@@ -212,8 +248,8 @@ export default function MVRVChart({ mvrvData, loading, error }) {
       backgroundColor: 'transparent',
       animation: false,
       grid: [
-        { top: 16, left: 72, right: 24, bottom: '44%' },
-        { top: '60%', left: 72, right: 24, bottom: 80 },
+        { top: 16, left: 72, right: 24, bottom: '32%' },
+        { top: '72%', left: 72, right: 24, bottom: 80 },
       ],
       tooltip: {
         trigger: 'axis',
@@ -240,16 +276,16 @@ export default function MVRVChart({ mvrvData, loading, error }) {
             <div style="font-family:JetBrains Mono,monospace;font-size:11px;color:#9090b0;margin-bottom:6px">${fmtDate(row?.[0] ?? 0)}</div>
             <div style="display:flex;flex-direction:column;gap:4px">
               <div style="display:flex;justify-content:space-between;gap:16px">
-                <span style="color:#9090b0;font-family:JetBrains Mono,monospace;font-size:11px">BTC</span>
+                <span style="color:#9090b0;font-family:JetBrains Mono,monospace;font-size:11px">Preço do BTC</span>
                 <span style="color:#e8e8f0;font-family:JetBrains Mono,monospace;font-size:12px;font-weight:600">${formatPriceFull(row?.[1] ?? 0)}</span>
               </div>
               <div style="display:flex;justify-content:space-between;gap:16px">
-                <span style="color:#9090b0;font-family:JetBrains Mono,monospace;font-size:11px">Realizado</span>
+                <span style="color:#9090b0;font-family:JetBrains Mono,monospace;font-size:11px">Preço Realizado</span>
                 <span style="color:#7878c0;font-family:JetBrains Mono,monospace;font-size:12px">${formatPriceFull(row?.[2] ?? 0)}</span>
               </div>
               <div style="margin-top:2px;padding-top:6px;border-top:1px solid #252540;display:flex;justify-content:space-between;gap:16px">
                 <span style="color:#9090b0;font-family:JetBrains Mono,monospace;font-size:11px">MVRV</span>
-                <span style="color:${color};font-family:JetBrains Mono,monospace;font-size:13px;font-weight:700">${mvrv?.toFixed(3) ?? '—'}</span>
+                <span style="color:${color};font-family:JetBrains Mono,monospace;font-size:16px;font-weight:700">${mvrv?.toFixed(3) ?? '—'}</span>
               </div>
             </div>
           `;
@@ -321,11 +357,12 @@ export default function MVRVChart({ mvrvData, loading, error }) {
         basePriceSeries,
         realizedSeries,
         baseMvrvSeries,
+        ...mvrvAreaSeries,
         ...(colored ? coloredPriceSeries : []),
-        ...coloredMvrvSeries,
+        ...coloredMvrvLine,
       ],
     };
-  }, [data, isLog, colored, zoomRange, coloredPriceSeries, coloredMvrvSeries]);
+  }, [data, isLog, colored, zoomRange, coloredPriceSeries, mvrvAreaSeries, coloredMvrvLine]);
 
   useEffect(() => {
     if (!echartsReady || !chartRef.current || !data.length) return;
@@ -443,13 +480,9 @@ export default function MVRVChart({ mvrvData, loading, error }) {
       )}
 
       <div className="zone-legend">
-        <div className="zone-item">
-          <span className="zone-dot" style={{ background: 'rgba(0,196,79,0.6)' }} />
-          <span>1.0 — Fundo histórico</span>
-        </div>
-        <div className="zone-item">
+        <div className="zone-item realized-highlight">
           <span className="zone-line" />
-          <span>Preço Realizado</span>
+          <span>Linha tracejada = Preço Realizado do BTC</span>
         </div>
       </div>
 
@@ -526,6 +559,16 @@ export default function MVRVChart({ mvrvData, loading, error }) {
         }
         .zone-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
         .zone-line { width:18px; height:0; border-top:2px dashed #7878c0; flex-shrink:0; }
+        .realized-highlight {
+          background: rgba(120,120,192,0.08);
+          border: 1px solid rgba(120,120,192,0.25);
+          border-radius: 6px;
+          padding: 5px 12px;
+          font-size: 11px !important;
+          color: #9090c8 !important;
+          font-weight: 500;
+        }
+        .realized-highlight span:last-child { color: #9090c8; }
       `}</style>
     </div>
   );
