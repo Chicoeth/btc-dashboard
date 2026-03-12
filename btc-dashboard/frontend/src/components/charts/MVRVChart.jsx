@@ -6,28 +6,27 @@
  * Escala de cor MVRV:
  *   ≤ 1.0  → verde  (#00c44f)
  *   1.0–2.5 → gradiente verde→vermelho
- *   ≥ 2.5  → vermelho (#e8000a)
+ *   ≥ 2.5  → vermelho saturado (#e8000a)
  */
 
 import { useEffect, useRef, useMemo, useState, useCallback } from 'react';
 
-// Mínimo e máximo "semânticos" do MVRV para a escala de cor
-const MVRV_MIN = 1.0;   // abaixo → verde
-const MVRV_MAX = 3.5;   // acima → vermelho saturado
+// Escala de cor: verde abaixo de 1, vermelho acima de 2.5
+const COLOR_MIN = 1.0;
+const COLOR_MAX = 2.5;
 
 function mvrvColor(value, alpha = 1) {
-  // < 1 → verde; > 3.5 → vermelho; entre → interpolação
-  const t = Math.max(0, Math.min(1, (value - MVRV_MIN) / (MVRV_MAX - MVRV_MIN)));
+  const t = Math.max(0, Math.min(1, (value - COLOR_MIN) / (COLOR_MAX - COLOR_MIN)));
   let r, g, b;
   if (t <= 0.5) {
-    // verde → amarelo
     const s = t / 0.5;
+    // verde → amarelo
     r = Math.round(0   + (245 - 0)   * s);
     g = Math.round(196 + (196 - 196) * s);
     b = Math.round(79  + (0   - 79)  * s);
   } else {
-    // amarelo → vermelho
     const s = (t - 0.5) / 0.5;
+    // amarelo → vermelho
     r = Math.round(245 + (232 - 245) * s);
     g = Math.round(196 + (0   - 196) * s);
     b = 0;
@@ -55,66 +54,33 @@ const PERIODS = [
   { label: '5A', months: 60 },
   { label: 'Todo', months: null },
 ];
-// Marcações de referência no gráfico MVRV
-const MVRV_ZONES = [
-  { value: 3.5, color: 'rgba(232,0,10,0.5)',  label: 'Topo histórico' },
-  { value: 2.5, color: 'rgba(245,196,0,0.4)', label: 'Sobrevalorizado' },
-  { value: 1.0, color: 'rgba(0,196,79,0.4)',  label: 'Fundo histórico' },
-];
-const LEGEND_VALUES = [3.5, 2.8, 2.1, 1.4, 0.7, 0.0];
 
-// Quebra a série de preço em segmentos coloridos por MVRV
-function buildColoredPriceSeries(data) {
+// Legenda lateral: de vermelho (2.5+) até verde (<1)
+const LEGEND_VALUES = [2.5, 2.0, 1.5, 1.0, 0.5];
+
+// Quebra série de preço em segmentos coloridos por MVRV
+function buildColoredSegments(data, yIndex, valueIndex) {
   if (!data.length) return [];
+  const THRESHOLD = 0.06;
   const series = [];
   let segStart = 0;
 
   for (let i = 1; i <= data.length; i++) {
-    const prev = data[i - 1];
-    const curr = data[i];
-    const changed = !curr || Math.abs(curr[3] - prev[3]) > 0.08 || i === data.length;
-    if (changed) {
+    const ended = i === data.length || Math.abs(data[i][3] - data[i-1][3]) > THRESHOLD;
+    if (ended) {
       const seg = data.slice(segStart, i);
       if (seg.length >= 2) {
         const avgMvrv = seg.reduce((s, d) => s + d[3], 0) / seg.length;
         series.push({
           type: 'line',
-          xAxisIndex: 0, yAxisIndex: 0,
-          data: seg.map(d => [d[0], d[1]]),  // [ts, btc_price]
+          xAxisIndex: yIndex === 0 ? 0 : 1,
+          yAxisIndex: yIndex,
+          data: seg.map(d => [d[0], d[valueIndex]]),
           smooth: false, symbol: 'none',
-          lineStyle: { color: mvrvColor(avgMvrv), width: 1.5, cap: 'round' },
-          silent: true, emphasis: { disabled: true }, z: 3,
-        });
-      }
-      segStart = i - 1;
-    }
-  }
-  return series;
-}
-
-// Série MVRV colorida por segmentos
-function buildColoredMvrvSeries(data) {
-  if (!data.length) return [];
-  const series = [];
-  let segStart = 0;
-
-  for (let i = 1; i <= data.length; i++) {
-    const prev = data[i - 1];
-    const curr = data[i];
-    const changed = !curr || Math.abs(curr[3] - prev[3]) > 0.08 || i === data.length;
-    if (changed) {
-      const seg = data.slice(segStart, i);
-      if (seg.length >= 2) {
-        const avgMvrv = seg.reduce((s, d) => s + d[3], 0) / seg.length;
-        const color   = mvrvColor(avgMvrv);
-        series.push({
-          type: 'line',
-          xAxisIndex: 1, yAxisIndex: 1,
-          data: seg.map(d => [d[0], d[3]]),
-          smooth: false, symbol: 'none',
-          lineStyle: { color, width: 1.8, cap: 'round' },
-          areaStyle: { color: mvrvColor(avgMvrv, 0.08) },
-          silent: true, emphasis: { disabled: true }, z: 3,
+          lineStyle: { color: mvrvColor(avgMvrv), width: yIndex === 0 ? 1.5 : 1.8, cap: 'round' },
+          areaStyle: yIndex === 1 ? { color: mvrvColor(avgMvrv, 0.07) } : undefined,
+          silent: true, emphasis: { disabled: true },
+          z: 3,
         });
       }
       segStart = i - 1;
@@ -134,42 +100,43 @@ export default function MVRVChart({ mvrvData, loading, error }) {
 
   useEffect(() => { import('echarts').then(() => setEchartsReady(true)); }, []);
 
-  // Valida e normaliza dados
   const data = useMemo(() => {
     if (!Array.isArray(mvrvData) || !mvrvData.length) return [];
-    return mvrvData.filter(d => d[0] && d[1] > 0 && d[2] > 0 && d[3] > 0);
+    return mvrvData.filter(d => Array.isArray(d) && d[0] && d[1] > 0 && d[2] > 0 && d[3] > 0);
   }, [mvrvData]);
 
-  // Zoom inicial por período
   const zoomRange = useMemo(() => {
     if (!data.length) return { start: 0, end: 100 };
     const period = PERIODS.find(p => p.label === activePeriod);
     if (!period?.months) return { start: 0, end: 100 };
-    const now      = Date.now();
-    const fromTs   = now - period.months * 30.44 * 86400000;
-    const firstTs  = data[0][0];
-    const lastTs   = data[data.length - 1][0];
-    const start    = Math.max(0, ((fromTs - firstTs) / (lastTs - firstTs)) * 100);
-    return { start, end: 100 };
+    const now    = Date.now();
+    const fromTs = now - period.months * 30.44 * 86400000;
+    const first  = data[0][0], last = data[data.length - 1][0];
+    return { start: Math.max(0, ((fromTs - first) / (last - first)) * 100), end: 100 };
   }, [data, activePeriod]);
 
-  // Séries coloridas (apenas recalcula quando dados ou cor mudam, não no zoom)
-  const coloredPriceSeries = useMemo(() => colored ? buildColoredPriceSeries(data) : [], [data, colored]);
-  const coloredMvrvSeries  = useMemo(() => buildColoredMvrvSeries(data), [data]);
+  // Séries coloridas — só recalcula quando dados ou colored mudam
+  const coloredPriceSeries = useMemo(
+    () => colored ? buildColoredSegments(data, 0, 1) : [],
+    [data, colored]
+  );
+  const coloredMvrvSeries = useMemo(
+    () => buildColoredSegments(data, 1, 3),
+    [data]
+  );
 
   const buildOption = useCallback((zoom) => {
     if (!data.length) return null;
     const z = zoom || zoomRange;
-
     const timestamps = data.map(d => d[0]);
     const spanDays   = Math.round(((z.end - z.start) / 100) * data.length);
 
-    // X-axis labels adaptativos
+    // Labels X adaptativos
     const xLabelFormatter = (val) => {
       const d = new Date(val), m = d.getMonth(), y = d.getFullYear(), day = d.getDate();
       if (spanDays > 365 * 3) return m === 0 ? String(y) : '';
       if (spanDays > 180) { if (m === 0) return String(y); if (m % 3 === 0) return MONTHS_PT[m]; return ''; }
-      if (spanDays > 60) return m === 0 ? String(y) : MONTHS_PT[m];
+      if (spanDays > 60)  return m === 0 ? String(y) : MONTHS_PT[m];
       if (day === 1) return MONTHS_PT[m] + (m === 0 ? '\n' + y : '');
       return [8, 15, 22].includes(day) ? String(day) : '';
     };
@@ -178,7 +145,7 @@ export default function MVRVChart({ mvrvData, loading, error }) {
                     : spanDays > 60       ? Math.floor(spanDays / 7)
                     : 'auto';
 
-    // Bounds do eixo Y de preço (log ou linear)
+    // Bounds log do eixo de preço baseados em dados visíveis
     let yPriceBounds = {};
     if (isLog) {
       const i0 = Math.floor((z.start / 100) * (data.length - 1));
@@ -193,7 +160,7 @@ export default function MVRVChart({ mvrvData, loading, error }) {
       }
     }
 
-    // Série base de preço (invisível — apenas para tooltip)
+    // Série base preço — invisível, só para tooltip
     const basePriceSeries = {
       type: 'line', name: '__price__',
       xAxisIndex: 0, yAxisIndex: 0,
@@ -207,7 +174,7 @@ export default function MVRVChart({ mvrvData, loading, error }) {
       z: 1,
     };
 
-    // Série do preço realizado
+    // Preço realizado — linha tracejada roxa
     const realizedSeries = {
       type: 'line', name: '__realized__',
       xAxisIndex: 0, yAxisIndex: 0,
@@ -217,7 +184,7 @@ export default function MVRVChart({ mvrvData, loading, error }) {
       z: 2,
     };
 
-    // Série base MVRV (invisível — apenas para tooltip)
+    // Série base MVRV — invisível, só para tooltip + markLine
     const baseMvrvSeries = {
       type: 'line', name: '__mvrv__',
       xAxisIndex: 1, yAxisIndex: 1,
@@ -225,20 +192,14 @@ export default function MVRVChart({ mvrvData, loading, error }) {
       symbol: 'none', smooth: false,
       lineStyle: { color: 'transparent', width: 0 },
       z: 1,
-    };
-
-    // Linhas de referência MVRV como markLine na série base
-    const mvrvRefLines = {
-      ...baseMvrvSeries,
       markLine: {
         silent: true, symbol: 'none',
-        lineStyle: { type: 'dashed', width: 1 },
-        label: { fontFamily: 'JetBrains Mono, monospace', fontSize: 9 },
-        data: MVRV_ZONES.map(z => ({
-          yAxis: z.value,
-          lineStyle: { color: z.color },
-          label: { formatter: `${z.value} · ${z.label}`, color: z.color, position: 'insideStartTop' },
-        })),
+        lineStyle: { type: 'dashed', width: 1, color: 'rgba(0,196,79,0.45)' },
+        label: {
+          fontFamily: 'JetBrains Mono, monospace', fontSize: 9,
+          color: 'rgba(0,196,79,0.7)', position: 'insideStartTop',
+        },
+        data: [{ yAxis: 1.0, name: '1.0', label: { formatter: '1.0 · Fundo histórico' } }],
       },
     };
 
@@ -266,11 +227,10 @@ export default function MVRVChart({ mvrvData, loading, error }) {
           const r = params.find(p => p.seriesName === '__realized__');
           const m = params.find(p => p.seriesName === '__mvrv__');
           if (!p) return '';
-          const idx     = p.dataIndex;
-          const row     = data[idx];
-          const mvrv    = row?.[3] ?? m?.value?.[1];
-          const color   = mvrvColor(mvrv ?? 1);
-
+          const idx   = p.dataIndex;
+          const row   = data[idx];
+          const mvrv  = row?.[3];
+          const color = mvrvColor(mvrv ?? 1);
           return `
             <div style="font-family:JetBrains Mono,monospace;font-size:11px;color:#9090b0;margin-bottom:6px">${fmtDate(row?.[0] ?? 0)}</div>
             <div style="display:flex;flex-direction:column;gap:4px">
@@ -355,14 +315,13 @@ export default function MVRVChart({ mvrvData, loading, error }) {
       series: [
         basePriceSeries,
         realizedSeries,
-        mvrvRefLines,
+        baseMvrvSeries,
         ...(colored ? coloredPriceSeries : []),
         ...coloredMvrvSeries,
       ],
     };
   }, [data, isLog, colored, zoomRange, coloredPriceSeries, coloredMvrvSeries]);
 
-  // Init chart
   useEffect(() => {
     if (!echartsReady || !chartRef.current || !data.length) return;
     const init = async () => {
@@ -389,7 +348,6 @@ export default function MVRVChart({ mvrvData, loading, error }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [echartsReady, data.length]);
 
-  // Re-apply on settings/zoom change
   useEffect(() => {
     const chart = chartInst.current;
     if (!chart || !data.length) return;
@@ -402,7 +360,6 @@ export default function MVRVChart({ mvrvData, loading, error }) {
 
   return (
     <div className="mvrv-chart-wrapper">
-      {/* Header */}
       <div className="chart-header">
         <div className="chart-left">
           {latest && (
@@ -416,7 +373,7 @@ export default function MVRVChart({ mvrvData, loading, error }) {
                 MVRV {latest[3].toFixed(3)}
               </span>
               <span className="realized-label">
-                Realizado: <strong>{formatPriceFull(latest[2])}</strong>
+                Preço Realizado: <strong>{formatPriceFull(latest[2])}</strong>
               </span>
             </>
           )}
@@ -440,20 +397,20 @@ export default function MVRVChart({ mvrvData, loading, error }) {
         </div>
       </div>
 
-      {/* Chart + Legend */}
       <div className="chart-body">
         <div className="chart-area">
           {(loading || error || !data.length) && (
             <div className="chart-state">
               {loading && <><div className="spinner" /><span>Carregando...</span></>}
               {error   && <span style={{ color: '#ef4444' }}>⚠ {error}</span>}
-              {!loading && !error && !data.length && <span>Sem dados. Execute <code>node scripts/fetch-mvrv.mjs</code></span>}
+              {!loading && !error && !data.length && (
+                <span>Sem dados. Execute <code>node scripts/fetch-mvrv.mjs</code></span>
+              )}
             </div>
           )}
           <div ref={chartRef} className="echarts-canvas"
             style={{ opacity: loading || error || !data.length ? 0 : 1 }} />
         </div>
-        {/* Color legend */}
         <div className="legend">
           <div className="legend-bar" />
           <div className="legend-labels">
@@ -466,7 +423,6 @@ export default function MVRVChart({ mvrvData, loading, error }) {
         </div>
       </div>
 
-      {/* Footer */}
       {data.length > 0 && (
         <div className="chart-footer">
           <span>{data.length.toLocaleString('pt-BR')} dias de dados</span>
@@ -481,21 +437,14 @@ export default function MVRVChart({ mvrvData, loading, error }) {
         </div>
       )}
 
-      {/* Legend info */}
       <div className="zone-legend">
-        {MVRV_ZONES.map(z => (
-          <div key={z.value} className="zone-item">
-            <span className="zone-dot" style={{ background: z.color }} />
-            <span style={{ color: '#9090b0', fontFamily: 'var(--font-mono)', fontSize: 10 }}>
-              {z.value} — {z.label}
-            </span>
-          </div>
-        ))}
+        <div className="zone-item">
+          <span className="zone-dot" style={{ background: 'rgba(0,196,79,0.6)' }} />
+          <span>1.0 — Fundo histórico</span>
+        </div>
         <div className="zone-item">
           <span className="zone-line" />
-          <span style={{ color: '#7878c0', fontFamily: 'var(--font-mono)', fontSize: 10 }}>
-            Preço Realizado
-          </span>
+          <span>Preço Realizado</span>
         </div>
       </div>
 
@@ -553,7 +502,7 @@ export default function MVRVChart({ mvrvData, loading, error }) {
         }
         .legend-bar {
           width:10px; border-radius:5px; flex-shrink:0;
-          background:linear-gradient(to bottom, #e8000a 0%, #f5c400 43%, #00c44f 100%);
+          background:linear-gradient(to bottom, #e8000a 0%, #f5c400 50%, #00c44f 100%);
         }
         .legend-labels { display:flex; flex-direction:column; justify-content:space-between; }
         .legend-label { font-family:var(--font-mono); font-size:9px; font-weight:500; line-height:1; }
@@ -563,12 +512,15 @@ export default function MVRVChart({ mvrvData, loading, error }) {
           font-size:10px; color:var(--text-muted); flex-wrap:wrap;
         }
         .zone-legend {
-          display:flex; align-items:center; gap:16px; padding:8px 20px 12px;
+          display:flex; align-items:center; gap:16px; padding:6px 20px 12px;
           flex-wrap:wrap;
         }
-        .zone-item { display:flex; align-items:center; gap:6px; }
+        .zone-item {
+          display:flex; align-items:center; gap:6px;
+          font-family:var(--font-mono); font-size:10px; color:#9090b0;
+        }
         .zone-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
-        .zone-line { width:16px; height:2px; background:#7878c0; border-radius:1px; flex-shrink:0; border-top:2px dashed #7878c0; }
+        .zone-line { width:18px; height:0; border-top:2px dashed #7878c0; flex-shrink:0; }
       `}</style>
     </div>
   );
