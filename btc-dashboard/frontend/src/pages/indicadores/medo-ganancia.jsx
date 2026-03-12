@@ -23,9 +23,9 @@ function useFngData() {
         ]);
         if (!fRes.ok) throw new Error(await fRes.text());
         if (!pRes.ok) throw new Error(await pRes.text());
-        const [fng, price] = await Promise.all([fRes.json(), pRes.json()]);
-        setFngData(fng);
-        setPriceData(price);
+        const [fng, priceResp] = await Promise.all([fRes.json(), pRes.json()]);
+        setFngData(Array.isArray(fng) ? fng : []);
+        setPriceData(Array.isArray(priceResp) ? priceResp : (priceResp?.data ?? []));
       } catch (e) {
         setError(e.message);
       } finally {
