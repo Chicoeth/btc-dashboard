@@ -11,25 +11,33 @@
 
 import { useEffect, useRef, useMemo, useState, useCallback } from 'react';
 
-// Escala de cor: verde abaixo de 1, vermelho acima de 2.5
-const COLOR_MIN = 1.0;
-const COLOR_MAX = 3.0;
+// Escala de cor: <1 = verde puro, 1-3 = gradiente verde→amarelo→vermelho, >3 = vermelho puro
+const COLOR_LOW  = 1.0;  // abaixo → verde saturado
+const COLOR_HIGH = 3.0;  // acima → vermelho saturado
+
+const C_GREEN  = [0, 196, 79];
+const C_YELLOW = [245, 196, 0];
+const C_RED    = [232, 0, 10];
 
 function mvrvColor(value, alpha = 1) {
-  const t = Math.max(0, Math.min(1, (value - COLOR_MIN) / (COLOR_MAX - COLOR_MIN)));
   let r, g, b;
-  if (t <= 0.5) {
-    const s = t / 0.5;
-    // verde → amarelo
-    r = Math.round(0   + (245 - 0)   * s);
-    g = Math.round(196 + (196 - 196) * s);
-    b = Math.round(79  + (0   - 79)  * s);
+  if (value <= COLOR_LOW) {
+    [r, g, b] = C_GREEN;
+  } else if (value >= COLOR_HIGH) {
+    [r, g, b] = C_RED;
   } else {
-    const s = (t - 0.5) / 0.5;
-    // amarelo → vermelho
-    r = Math.round(245 + (232 - 245) * s);
-    g = Math.round(196 + (0   - 196) * s);
-    b = 0;
+    const t = (value - COLOR_LOW) / (COLOR_HIGH - COLOR_LOW); // 0→1
+    if (t <= 0.5) {
+      const s = t / 0.5;
+      r = Math.round(C_GREEN[0]  + (C_YELLOW[0] - C_GREEN[0])  * s);
+      g = Math.round(C_GREEN[1]  + (C_YELLOW[1] - C_GREEN[1])  * s);
+      b = Math.round(C_GREEN[2]  + (C_YELLOW[2] - C_GREEN[2])  * s);
+    } else {
+      const s = (t - 0.5) / 0.5;
+      r = Math.round(C_YELLOW[0] + (C_RED[0] - C_YELLOW[0]) * s);
+      g = Math.round(C_YELLOW[1] + (C_RED[1] - C_YELLOW[1]) * s);
+      b = Math.round(C_YELLOW[2] + (C_RED[2] - C_YELLOW[2]) * s);
+    }
   }
   return alpha < 1 ? `rgba(${r},${g},${b},${alpha})` : `rgb(${r},${g},${b})`;
 }
@@ -56,7 +64,7 @@ const PERIODS = [
 ];
 
 // Legenda lateral: de vermelho (2.5+) até verde (<1)
-const LEGEND_VALUES = [4.0, 3.5, 3.0, 2.5, 2.0, 1.5, 1.0, 0.5, 0.0];
+const LEGEND_VALUES = [4.0, 3.0, 2.0, 1.0, 0.0];
 
 // Quebra série de preço em segmentos coloridos por MVRV
 function buildColoredSegments(data, gridIndex, valueIndex) {
@@ -227,7 +235,7 @@ export default function MVRVChart({ mvrvData, loading, error }) {
       z: 2,
     };
 
-    // Série base MVRV — invisível, só para tooltip + markLine
+    // Série base MVRV — linha cinza quando sem cor, invisível quando com cor
     const baseMvrvSeries = {
       type: 'line', name: '__mvrv__',
       xAxisIndex: 1, yAxisIndex: 1,
@@ -321,7 +329,7 @@ export default function MVRVChart({ mvrvData, loading, error }) {
           splitLine: { lineStyle: { color: '#1e1e35', type: 'dashed' } },
         },
         {
-          type: 'value', min: 0, max: 4,
+          type: 'value', min: 0, max: 5,
           gridIndex: 1,
           name: 'MVRV', nameLocation: 'middle', nameGap: 56,
           nameTextStyle: { color: '#5a5a80', fontFamily: 'JetBrains Mono, monospace', fontSize: 11 },
@@ -331,7 +339,7 @@ export default function MVRVChart({ mvrvData, loading, error }) {
             formatter: v => v.toFixed(1),
           },
           splitLine: { lineStyle: { color: '#1e1e35', type: 'dashed' } },
-          interval: 0.5,
+          interval: 1,
         },
       ],
       dataZoom: [
@@ -355,19 +363,48 @@ export default function MVRVChart({ mvrvData, loading, error }) {
         },
         { type: 'inside', xAxisIndex: [0, 1], start: z.start, end: z.end },
       ],
+      graphic: [{
+        type: 'group',
+        left: 80,   // just inside the left axis (grid left=72)
+        top: 22,    // just below top of grid[0]
+        children: [
+          {
+            type: 'rect',
+            shape: { width: 234, height: 20, r: 4 },
+            style: { fill: 'rgba(10,10,20,0.72)', stroke: 'rgba(120,120,192,0.3)', lineWidth: 1 },
+          },
+          {
+            type: 'line',
+            shape: { x1: 10, y1: 10, x2: 30, y2: 10 },
+            style: { stroke: '#7878c0', lineWidth: 1.5, lineDash: [4, 3] },
+          },
+          {
+            type: 'text',
+            left: 36,
+            top: 3,
+            style: {
+              text: 'Linha tracejada = Preço Realizado',
+              fill: '#9090c8',
+              fontSize: 10,
+              fontFamily: 'JetBrains Mono, monospace',
+            },
+          },
+        ],
+      }],
       series: [
         basePriceSeries,
         realizedSeries,
         baseMvrvSeries,
         ...mvrvAreaSeries,
-        // Linha cinza do MVRV quando sem cor
+        // Linha cinza do MVRV — visível em modo sem cor, z:5 para ficar acima da área
         ...(!coloredMvrv ? [{
           type: 'line', name: '__mvrv_gray__',
           xAxisIndex: 1, yAxisIndex: 1,
           data: data.map(d => [new Date(d[0]).toISOString().split('T')[0], d[3]]),
           symbol: 'none', smooth: false,
           lineStyle: { color: '#9090b0', width: 1.5 },
-          z: 3,
+          emphasis: { disabled: true }, silent: true,
+          z: 5,
         }] : []),
         ...(coloredPrice ? coloredPriceSeries : []),
         ...coloredMvrvLine,
@@ -496,12 +533,7 @@ export default function MVRVChart({ mvrvData, loading, error }) {
         </div>
       )}
 
-      <div className="zone-legend">
-        <div className="zone-item realized-highlight">
-          <span className="zone-line" />
-          <span>Linha tracejada = Preço Realizado do BTC</span>
-        </div>
-      </div>
+
 
       <style jsx>{`
         .mvrv-chart-wrapper { display:flex; flex-direction:column; height:100%; }
@@ -558,11 +590,17 @@ export default function MVRVChart({ mvrvData, loading, error }) {
         @keyframes spin { to { transform:rotate(360deg); } }
         .legend {
           display:flex; flex-direction:row; align-items:stretch;
-          padding:16px 12px 80px 8px; gap:4px;
+          padding:calc(72% + 4px) 12px 80px 8px; gap:4px;
         }
         .legend-bar {
           width:10px; border-radius:5px; flex-shrink:0;
-          background:linear-gradient(to bottom, #e8000a 0%, #f5c400 50%, #00c44f 100%);
+          background:linear-gradient(to bottom,
+            #e8000a 0%,        /* 4.0 — vermelho */
+            #e8000a 25%,       /* 3.0 — vermelho (mesma cor) */
+            #f5c400 50%,       /* 2.0 — amarelo  */
+            #00c44f 75%,       /* 1.0 — verde    */
+            #00c44f 100%       /* 0.0 — verde (mesma cor) */
+          );
         }
         .legend-labels { display:flex; flex-direction:column; justify-content:space-between; }
         .legend-label { font-family:var(--font-mono); font-size:9px; font-weight:500; line-height:1; }
