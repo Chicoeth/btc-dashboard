@@ -4,7 +4,7 @@ import { Bitcoin, TrendingUp, Activity, BarChart2, ArrowUpRight, ArrowDownRight 
 
 const NAV = [
   { label: 'Preço Histórico',             href: '/mercado/preco',             icon: TrendingUp     },
-  { label: 'MVRV',                        href: '/indicadores/mvrv',          icon: BarChart2,      soon: true },
+  { label: 'MVRV',                        href: '/indicadores/mvrv',          icon: BarChart2,      soon: false },
   { label: 'Índice Medo & Ganância',      href: '/indicadores/medo-ganancia', icon: Activity       },
   { label: 'Performance Ciclos de Alta',  href: '/indicadores/ciclos-alta',   icon: ArrowUpRight,   soon: true },
   { label: 'Performance Ciclos de Baixa', href: '/indicadores/ciclos-baixa',  icon: ArrowDownRight, soon: true },
