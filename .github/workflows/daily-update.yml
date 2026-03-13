@@ -8,12 +8,30 @@ on:
 jobs:
   update:
     runs-on: ubuntu-latest
+
     steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
       - name: Update BTC Price
-        run: curl -s "https://btc-dashboard-jade.vercel.app/api/price/update"
+        run: node frontend/scripts/update-price.mjs
 
       - name: Update Fear & Greed Index
-        run: curl -s "https://btc-dashboard-jade.vercel.app/api/fng/update"
+        run: node frontend/scripts/update-fng.mjs
 
       - name: Update MVRV
-        run: curl -s "https://btc-dashboard-jade.vercel.app/api/mvrv/update"
+        run: node frontend/scripts/update-mvrv.mjs
+
+      - name: Commit and push if data changed
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add frontend/public/data/
+          git diff --staged --quiet || git commit -m "chore: daily data update $(date -u '+%Y-%m-%d')"
+          git push
+
