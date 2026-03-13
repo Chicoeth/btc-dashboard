@@ -5,7 +5,7 @@ const DATA_FILE = path.join(process.cwd(), 'public', 'data', 'fng.json');
 const SECRET    = process.env.UPDATE_SECRET;
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).end();
+  if (req.method !== 'GET') return res.status(405).end();
   if (SECRET && req.headers['authorization'] !== `Bearer ${SECRET}`)
     return res.status(401).json({ error: 'Unauthorized' });
 

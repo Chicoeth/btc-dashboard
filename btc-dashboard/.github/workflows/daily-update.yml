@@ -1,0 +1,29 @@
+name: Daily Data Update
+
+on:
+  schedule:
+    # Roda todo dia às 06:00 UTC (após mercados fecharem e dados ficarem disponíveis)
+    - cron: '0 6 * * *'
+  workflow_dispatch: # permite rodar manualmente pelo GitHub
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update BTC Price
+        run: |
+          curl -f -s "https://btc-dashboard-jade.vercel.app/api/price/update" \
+            && echo "✓ price/update OK" \
+            || echo "✗ price/update FAILED"
+
+      - name: Update Fear & Greed Index
+        run: |
+          curl -f -s "https://btc-dashboard-jade.vercel.app/api/fng/update" \
+            && echo "✓ fng/update OK" \
+            || echo "✗ fng/update FAILED"
+
+      - name: Update MVRV
+        run: |
+          curl -f -s "https://btc-dashboard-jade.vercel.app/api/mvrv/update" \
+            && echo "✓ mvrv/update OK" \
+            || echo "✗ mvrv/update FAILED"
