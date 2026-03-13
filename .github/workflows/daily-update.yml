@@ -1,0 +1,19 @@
+name: Daily Data Update
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update BTC Price
+        run: curl -s "https://btc-dashboard-jade.vercel.app/api/price/update"
+
+      - name: Update Fear & Greed Index
+        run: curl -s "https://btc-dashboard-jade.vercel.app/api/fng/update"
+
+      - name: Update MVRV
+        run: curl -s "https://btc-dashboard-jade.vercel.app/api/mvrv/update"
