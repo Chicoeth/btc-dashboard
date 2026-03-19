@@ -22,7 +22,7 @@
  *   H4: 19/04/2024 → hoje (próximo halving ~2028)
  */
 
-import { useEffect, useRef, useMemo, useState } from 'react';
+import { useEffect, useRef, useMemo, useState, useCallback } from 'react';
 
 // ─── Paleta de cores dos ciclos ───────────────────────────────────────────────
 const CYCLE_COLORS = [
@@ -270,8 +270,8 @@ export default function CycleChart({ priceData, loading, error }) {
     return buildMeanStdDev(previous);
   }, [seriesList, showMean]);
 
-  // ── Build ECharts option ──
-  const buildOption = useMemo(() => {
+  // ── Build ECharts option (callback, not memo) ──
+  const buildOption = useCallback(() => {
     if (!priceData?.length || !cycleDefs.length) return null;
 
     const mainSeries = cycleDefs.map((c, i) => ({
@@ -302,33 +302,33 @@ export default function CycleChart({ priceData, loading, error }) {
         z: 6,
       });
 
-      if (showStd && upper.length) {
+      if (showStd && upper.length && lower.length) {
+        // Banda de desvio padrão usando areaStyle entre upper e lower
         extraSeries.push({
           type: 'line',
-          name: 'Média + 1σ',
+          name: 'σ superior',
           data: upper.map(([d, v]) => [d, v]),
           smooth: false,
           symbol: 'none',
           lineStyle: { color: 'transparent', width: 0 },
           areaStyle: { color: STDDEV_COLOR },
-          stack: '__std_upper__',
+          stack: '__std__',
           z: 2,
-        });
-        // Lower como diferença
-        const lowerDiff = lower.map(([d, v], i2) => {
-          const u = upper[i2]?.[1] ?? v;
-          return [d, u - v]; // largura da banda
+          silent: true,
+          emphasis: { disabled: true },
         });
         extraSeries.push({
           type: 'line',
-          name: 'Média - 1σ',
+          name: 'σ inferior',
           data: lower.map(([d, v]) => [d, v]),
           smooth: false,
           symbol: 'none',
           lineStyle: { color: 'transparent', width: 0 },
-          areaStyle: { color: 'transparent' },
-          stackStrategy: 'all',
+          areaStyle: { color: '#111120' }, // cobre a metade de baixo
+          stack: '__std__',
           z: 2,
+          silent: true,
+          emphasis: { disabled: true },
         });
       }
     }
@@ -336,7 +336,7 @@ export default function CycleChart({ priceData, loading, error }) {
     return {
       backgroundColor: 'transparent',
       animation: false,
-      grid: { top: 24, left: 72, right: 32, bottom: 60 },
+      grid: { top: 24, left: 76, right: 32, bottom: 64 },
       legend: {
         show: true,
         bottom: 8,
@@ -344,6 +344,10 @@ export default function CycleChart({ priceData, loading, error }) {
         itemWidth: 20,
         itemHeight: 2,
         icon: 'rect',
+        formatter: name => {
+          if (name === 'σ superior' || name === 'σ inferior') return '';
+          return name;
+        },
       },
       tooltip: {
         trigger: 'axis',
@@ -360,15 +364,15 @@ export default function CycleChart({ priceData, loading, error }) {
           if (!params?.length) return '';
           const day = params[0]?.axisValue;
           const lines = params
-            .filter(p => p.seriesName !== 'Média - 1σ' && p.seriesName !== 'Média + 1σ')
+            .filter(p => p.seriesName !== 'σ superior' && p.seriesName !== 'σ inferior')
             .map(p => {
               const v = Array.isArray(p.value) ? p.value[1] : p.value;
-              if (!v || isNaN(v)) return '';
+              if (v == null || isNaN(v)) return '';
               return `<div style="display:flex;justify-content:space-between;gap:16px;margin:2px 0">
                 <span style="color:${p.color};font-family:JetBrains Mono,monospace;font-size:10px">${p.seriesName}</span>
                 <span style="color:#e8e8f0;font-family:JetBrains Mono,monospace;font-size:11px;font-weight:600">${fmtMultiple(v)}</span>
               </div>`;
-            }).join('');
+            }).filter(Boolean).join('');
           return `<div style="font-family:JetBrains Mono,monospace;font-size:10px;color:#5a5a80;margin-bottom:6px">Dia ${day}</div>${lines}`;
         },
       },
@@ -387,7 +391,7 @@ export default function CycleChart({ priceData, loading, error }) {
       yAxis: {
         type: 'log',
         logBase: 10,
-        name: 'Retorno (normalizado em 1x)',
+        name: 'Retorno (normalizado em 1×)',
         nameLocation: 'middle',
         nameGap: 60,
         nameTextStyle: { color: '#5a5a80', fontFamily: 'JetBrains Mono, monospace', fontSize: 10 },
@@ -411,21 +415,30 @@ export default function CycleChart({ priceData, loading, error }) {
     };
   }, [cycleDefs, seriesList, showMean, showStd, mean, upper, lower, priceData]);
 
-  // ── Init / update chart ──
+  // ── Init chart (runs once when echarts + data are ready) ──
   useEffect(() => {
-    if (!echartsReady || !chartRef.current || !buildOption) return;
+    if (!echartsReady || !chartRef.current || !priceData?.length) return;
     const init = async () => {
       const echarts = await import('echarts');
-      let chart = chartInst.current;
-      if (!chart) {
-        chart = echarts.init(chartRef.current, null, { renderer: 'canvas' });
+      if (!chartInst.current) {
+        const chart = echarts.init(chartRef.current, null, { renderer: 'canvas' });
         chartInst.current = chart;
         new ResizeObserver(() => chart.resize()).observe(chartRef.current);
       }
-      chart.setOption(buildOption, { notMerge: true });
+      const option = buildOption();
+      if (option) chartInst.current.setOption(option, { notMerge: true });
     };
     init();
-  }, [echartsReady, buildOption]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [echartsReady, priceData?.length]);
+
+  // ── Update chart when options change ──
+  useEffect(() => {
+    const chart = chartInst.current;
+    if (!chart || !priceData?.length) return;
+    const option = buildOption();
+    if (option) chart.setOption(option, { notMerge: true });
+  }, [buildOption]);
 
   // ── Stats do ciclo atual ──
   const currentCycle = cycleDefs[cycleDefs.length - 1];
