@@ -1,13 +1,12 @@
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { Bitcoin, TrendingUp, Activity, BarChart2, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { Bitcoin, TrendingUp, Activity, BarChart2, GitCompare } from 'lucide-react';
 
 const NAV = [
-  { label: 'Preço Histórico',             href: '/mercado/preco',             icon: TrendingUp     },
-  { label: 'MVRV',                        href: '/indicadores/mvrv',          icon: BarChart2,      soon: false },
-  { label: 'Índice Medo & Ganância',      href: '/indicadores/medo-ganancia', icon: Activity       },
-  { label: 'Performance Ciclos de Alta',  href: '/indicadores/ciclos-alta',   icon: ArrowUpRight,   soon: true },
-  { label: 'Performance Ciclos de Baixa', href: '/indicadores/ciclos-baixa',  icon: ArrowDownRight, soon: true },
+  { label: 'Preço Histórico',        href: '/mercado/preco',                 icon: TrendingUp  },
+  { label: 'MVRV',                   href: '/indicadores/mvrv',              icon: BarChart2   },
+  { label: 'Índice Medo & Ganância', href: '/indicadores/medo-ganancia',     icon: Activity    },
+  { label: 'Comparador de Ciclos',   href: '/indicadores/comparador-ciclos', icon: GitCompare  },
 ];
 
 export default function Sidebar() {
