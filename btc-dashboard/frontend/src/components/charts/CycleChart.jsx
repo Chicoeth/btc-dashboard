@@ -534,7 +534,7 @@ export default function CycleChart({ priceData, loading, error }) {
       </div>
 
       {/* Chart area */}
-      <div className="chart-area">
+      <div className="chart-area" style={{ position: 'relative', height: '520px' }}>
         {(loading || error || !hasData) && (
           <div className="chart-state">
             {loading && <><div className="spinner" /><span>Carregando...</span></>}
@@ -545,7 +545,7 @@ export default function CycleChart({ priceData, loading, error }) {
         <div
           ref={chartRef}
           className="echarts-canvas"
-          style={{ opacity: loading || error || !hasData ? 0 : 1 }}
+          style={{ width: '100%', height: '520px', opacity: loading || error || !hasData ? 0 : 1, transition: 'opacity 0.3s' }}
         />
       </div>
 
