@@ -165,8 +165,11 @@ export default function CycleChart({ priceData, loading, error }) {
 
   useEffect(() => { import('echarts').then(() => setEchartsReady(true)); }, []);
 
-  // Reseta ao trocar de modo
-  useEffect(() => { setLegendSelected({}); setXPeriod(null); }, [mode]);
+  // Reseta ao trocar de modo — Ciclo 1 começa desmarcado no modo de alta
+  useEffect(() => {
+    setLegendSelected(mode === 'bull' ? { 'Ciclo 1': false } : {});
+    setXPeriod(null);
+  }, [mode]);
 
   const priceMap = useMemo(() => {
     if (!priceData?.length) return new Map();
@@ -293,6 +296,8 @@ export default function CycleChart({ priceData, loading, error }) {
         itemHeight: 2,
         icon: 'rect',
         textStyle: { color: '#9090b0', fontFamily: 'JetBrains Mono, monospace', fontSize: 10 },
+        inactiveColor: '#2a2a42',      // série desmarcada fica bem apagada
+        inactiveBorderColor: '#2a2a42',
         pageButtonItemGap: 5,
         pageTextStyle: { color: '#5a5a80', fontFamily: 'JetBrains Mono, monospace', fontSize: 10 },
         formatter: name => name.startsWith('__') ? null : name,
@@ -331,10 +336,10 @@ export default function CycleChart({ priceData, loading, error }) {
         name: 'Dias desde o início do ciclo',
         nameLocation: 'middle',
         nameGap: 40,
-        nameTextStyle: { color: '#5a5a80', fontFamily: 'JetBrains Mono, monospace', fontSize: 10 },
+        nameTextStyle: { color: '#9090b8', fontFamily: 'JetBrains Mono, monospace', fontSize: 11, fontWeight: '500' },
         axisLine: { lineStyle: { color: '#1e1e35' } },
         axisTick: { show: false },
-        axisLabel: { color: '#5a5a80', fontFamily: 'JetBrains Mono, monospace', fontSize: 10 },
+        axisLabel: { color: '#8080a8', fontFamily: 'JetBrains Mono, monospace', fontSize: 11 },
         splitLine: { lineStyle: { color: '#1e1e35', type: 'dashed' } },
         min: 0,
         max: xMax,
@@ -342,16 +347,16 @@ export default function CycleChart({ priceData, loading, error }) {
       yAxis: {
         type: 'log',
         logBase: 10,
-        name: 'Retorno (normalizado em 1x)',
+        name: 'Retorno (normalizado em 1×)',
         nameLocation: 'middle',
         nameGap: 60,
-        nameTextStyle: { color: '#5a5a80', fontFamily: 'JetBrains Mono, monospace', fontSize: 10 },
+        nameTextStyle: { color: '#9090b8', fontFamily: 'JetBrains Mono, monospace', fontSize: 11, fontWeight: '500' },
         axisLine: { show: false },
         axisTick: { show: false },
         axisLabel: {
-          color: '#5a5a80',
+          color: '#8080a8',
           fontFamily: 'JetBrains Mono, monospace',
-          fontSize: 10,
+          fontSize: 11,
           formatter: v => {
             if (v >= 1000) return (v / 1000).toFixed(0) + 'k×';
             if (v >= 10)   return v.toFixed(0) + '×';
@@ -551,9 +556,9 @@ export default function CycleChart({ priceData, loading, error }) {
         @keyframes spin { to { transform: rotate(360deg); } }
 
         .chart-footer {
-          display: flex; align-items: center; gap: 8px; padding: 8px 20px;
+          display: flex; align-items: center; gap: 8px; padding: 6px 20px;
           border-top: 1px solid var(--border-subtle); font-family: var(--font-mono);
-          font-size: 10px; color: var(--text-muted); flex-wrap: wrap;
+          font-size: 9px; color: #3a3a58; flex-wrap: wrap;
         }
       `}</style>
     </div>
