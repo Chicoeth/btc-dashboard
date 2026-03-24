@@ -24,23 +24,30 @@ function formatDateTooltip(val) {
   return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-/* ─── Mayer color scale ─── */
+/* ─── Mayer color scale (nova) ───
+   ≤ 0.6  → verde puro
+   0.6–2.0 → gradiente verde→amarelo→vermelho
+   ≥ 2.0  → vermelho puro
+*/
 function mayerColor(val, alpha) {
   let r, g, b;
-  if (val <= 0.8) {
+  if (val <= 0.6) {
     r = 0; g = 196; b = 79;
   } else if (val <= 1.0) {
-    const t = (val - 0.8) / 0.2;
-    r = Math.round(t * 140);
-    g = 196 - Math.round(t * 16);
+    // verde → amarelo (0.6 → 1.0)
+    const t = (val - 0.6) / 0.4;
+    r = Math.round(t * 245);
+    g = 196 - Math.round(t * 0);
     b = 79 - Math.round(t * 79);
   } else if (val <= 1.5) {
+    // amarelo → laranja (1.0 → 1.5)
     const t = (val - 1.0) / 0.5;
-    r = 140 + Math.round(t * 105);
-    g = 180 - Math.round(t * 80);
+    r = 245;
+    g = 196 - Math.round(t * 96);
     b = 0;
-  } else if (val <= 2.4) {
-    const t = Math.min(1, (val - 1.5) / 0.9);
+  } else if (val <= 2.0) {
+    // laranja → vermelho (1.5 → 2.0)
+    const t = (val - 1.5) / 0.5;
     r = 232;
     g = Math.round(100 * (1 - t));
     b = Math.round(10 * (1 - t));
@@ -51,9 +58,9 @@ function mayerColor(val, alpha) {
   return `rgb(${r},${g},${b})`;
 }
 
-const LEGEND_VALUES = [0, 0.4, 0.8, 1.0, 1.2, 1.5, 2.0, 2.4, 3.0];
+const LEGEND_VALUES = [0, 0.4, 0.6, 0.8, 1.0, 1.2, 1.5, 2.0, 2.5, 3.0];
 
-/* ─── Build colored line segments ─── */
+/* ─── Build colored line segments (sem area no grid inferior) ─── */
 function buildColoredSegments(rows, gridIndex, priceKey, mayerKey) {
   if (!rows.length) return [];
   const THRESHOLD = 0.05;
@@ -79,45 +86,9 @@ function buildColoredSegments(rows, gridIndex, priceKey, mayerKey) {
           smooth: false,
           symbol: 'none',
           lineStyle: { color: mayerColor(avgMayer), width: gridIndex === 0 ? 1.5 : 1.8, cap: 'round' },
-          areaStyle: gridIndex === 1 ? { color: mayerColor(avgMayer, 0.07) } : undefined,
           silent: true,
           emphasis: { disabled: true },
           z: 3,
-        });
-      }
-      segStart = i - 1;
-    }
-  }
-  return series;
-}
-
-/* ─── Build Mayer area series (always visible) ─── */
-function buildMayerAreaSeries(rows) {
-  if (!rows.length) return [];
-  const THRESHOLD = 0.06;
-  const series = [];
-  let segStart = 0;
-
-  for (let i = 1; i <= rows.length; i++) {
-    const ended = i === rows.length
-      || Math.abs(rows[i]?.mayer - rows[i - 1].mayer) > THRESHOLD;
-    if (ended) {
-      const start = segStart > 0 ? segStart - 1 : segStart;
-      if (i - start >= 2) {
-        const avgMayer = Array.from({ length: i - start }, (_, k) => rows[start + k].mayer)
-          .reduce((s, v) => s + v, 0) / (i - start);
-        series.push({
-          type: 'line',
-          xAxisIndex: 1, yAxisIndex: 1,
-          data: Array.from({ length: i - start }, (_, k) => [
-            rows[start + k].date,
-            rows[start + k].mayer,
-          ]),
-          smooth: false, symbol: 'none',
-          lineStyle: { color: 'transparent', width: 0 },
-          areaStyle: { color: mayerColor(avgMayer, 0.10) },
-          silent: true, emphasis: { disabled: true },
-          z: 2,
         });
       }
       segStart = i - 1;
@@ -170,8 +141,7 @@ export default function MayerChart({ priceData, loading, error }) {
     () => coloredPrice ? buildColoredSegments(data, 0, 'price', 'mayer') : [],
     [data, coloredPrice]
   );
-  const mayerAreaSeries   = useMemo(() => buildMayerAreaSeries(data), [data]);
-  const coloredMayerLine  = useMemo(() => buildColoredSegments(data, 1, 'mayer', 'mayer'), [data]);
+  const coloredMayerLine = useMemo(() => buildColoredSegments(data, 1, 'mayer', 'mayer'), [data]);
 
   /* ─── buildOption (useCallback!) ─── */
   const buildOption = useCallback((zoom) => {
@@ -239,6 +209,7 @@ export default function MayerChart({ priceData, loading, error }) {
       emphasis: { disabled: true }, silent: true, z: 2,
     };
 
+    // base Mayer series — invisível, só para tooltip
     const baseMayerSeries = {
       type: 'line', name: '__mayer__',
       xAxisIndex: 1, yAxisIndex: 1,
@@ -248,20 +219,21 @@ export default function MayerChart({ priceData, loading, error }) {
       z: 1,
     };
 
+    // Linha cinza do Mayer — visível sempre como base (z:4, abaixo da colorida z:5 se ativa)
     const mayerGrayLine = {
       type: 'line', name: '__mayer_gray__',
       xAxisIndex: 1, yAxisIndex: 1,
       data: data.map(d => [d.date, d.mayer]),
       symbol: 'none', smooth: false,
       lineStyle: { color: '#9090b0', width: 1.5 },
-      emphasis: { disabled: true }, silent: true, z: 5,
+      emphasis: { disabled: true }, silent: true, z: 4,
     };
 
     return {
       animation: false,
       grid: [
-        { left: 72, right: 48, top: 16, height: '55%' },
-        { left: 72, right: 48, top: '76%', height: '16%' },
+        { left: 72, right: 48, top: 16, height: '48%' },       // preço — diminuído para dar espaço
+        { left: 72, right: 48, top: '68%', height: '14%' },     // mayer — mais acima
       ],
       axisPointer: { link: [{ xAxisIndex: 'all' }] },
       tooltip: {
@@ -331,7 +303,7 @@ export default function MayerChart({ priceData, loading, error }) {
       dataZoom: [
         {
           type: 'slider', xAxisIndex: [0, 1],
-          bottom: 10, height: 44,
+          bottom: 10, height: 36,
           start: z.start, end: z.end,
           borderColor: '#1e1e35',
           backgroundColor: 'rgba(10,10,15,0.6)',
@@ -363,13 +335,12 @@ export default function MayerChart({ priceData, loading, error }) {
         basePriceSeries,
         sma200Series,
         baseMayerSeries,
-        ...mayerAreaSeries,
         mayerGrayLine,
         ...(coloredPrice ? coloredPriceSeries : []),
         ...coloredMayerLine,
       ],
     };
-  }, [data, isLog, coloredPrice, zoomRange, coloredPriceSeries, mayerAreaSeries, coloredMayerLine]);
+  }, [data, isLog, coloredPrice, zoomRange, coloredPriceSeries, coloredMayerLine]);
 
   /* ─── init chart ─── */
   useEffect(() => {
@@ -556,17 +527,17 @@ export default function MayerChart({ priceData, loading, error }) {
 
         .legend {
           width:36px; display:flex; flex-direction:column; align-items:center;
-          padding:16px 0; gap:0; flex-shrink:0;
+          padding:16px 6px 16px 0; gap:0; flex-shrink:0;
         }
         .legend-bar {
           width:8px; flex:1; border-radius:4px;
           background:linear-gradient(
             to bottom,
             rgb(232,0,10) 0%,
-            rgb(245,100,0) 25%,
-            rgb(245,196,0) 45%,
-            rgb(140,180,0) 60%,
-            rgb(0,196,79) 80%,
+            rgb(232,0,10) 10%,
+            rgb(245,100,0) 35%,
+            rgb(245,196,0) 55%,
+            rgb(0,196,79) 75%,
             rgb(0,196,79) 100%
           );
         }
