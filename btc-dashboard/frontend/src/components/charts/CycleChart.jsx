@@ -320,7 +320,6 @@ export default function CycleChart({ priceData, loading, error }) {
       backgroundColor: 'transparent',
       animation: false,
       grid: { top: 24, left: 76, right: 32, bottom: 80 },
-      // FIX 2: legenda com scroll para não sobrepor itens
       legend: {
         type: 'scroll',
         bottom: 4,
@@ -332,9 +331,10 @@ export default function CycleChart({ priceData, loading, error }) {
         textStyle: { color: '#9090b0', fontFamily: 'JetBrains Mono, monospace', fontSize: 10 },
         pageButtonItemGap: 5,
         pageTextStyle: { color: '#5a5a80', fontFamily: 'JetBrains Mono, monospace', fontSize: 10 },
-        // Esconde as séries internas de stddev da legenda
         formatter: name => (name.startsWith('__') ? null : name),
         selectedMode: true,
+        // Preserva o estado visual (visível/oculto) após cada re-render
+        selected: legendSelected,
       },
       tooltip: {
         trigger: 'axis',
@@ -402,7 +402,7 @@ export default function CycleChart({ priceData, loading, error }) {
       },
       series: [...mainSeries, ...extraSeries],
     };
-  }, [cycleDefs, seriesList, showMean, showStd, mean, upper, lower, priceData]);
+  }, [cycleDefs, seriesList, showMean, showStd, mean, upper, lower, priceData, legendSelected]);
 
   // ── Init ──
   useEffect(() => {
