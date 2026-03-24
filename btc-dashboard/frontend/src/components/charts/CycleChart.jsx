@@ -185,9 +185,16 @@ export default function CycleChart({ priceData, loading, error }) {
 
   const { mean, upper, lower } = useMemo(() => {
     if (!showMean || seriesList.length < 2) return { mean: [], upper: [], lower: [] };
-    const prevDefs   = cycleDefs.slice(0, -1);
-    const prevSeries = seriesList.slice(0, -1);
-    const active = prevSeries.filter((_, i) => legendSelected[prevDefs[i]?.label] !== false);
+
+    // Exclui apenas o ciclo ATUAL (end: null = ainda em andamento)
+    // Ciclos já finalizados entram no cálculo, mesmo que sejam o último do array
+    const completedSeries = seriesList.filter((_, i) => cycleDefs[i]?.end !== null);
+    const completedDefs   = cycleDefs.filter(c => c.end !== null);
+
+    const active = completedSeries.filter((_, i) =>
+      legendSelected[completedDefs[i]?.label] !== false
+    );
+
     if (!active.length) return { mean: [], upper: [], lower: [] };
     return buildMeanStdDev(active);
   }, [seriesList, cycleDefs, showMean, legendSelected]);
@@ -556,9 +563,9 @@ export default function CycleChart({ priceData, loading, error }) {
         @keyframes spin { to { transform: rotate(360deg); } }
 
         .chart-footer {
-          display: flex; align-items: center; gap: 8px; padding: 6px 20px;
-          border-top: 1px solid var(--border-subtle); font-family: var(--font-mono);
-          font-size: 9px; color: #3a3a58; flex-wrap: wrap;
+          display: flex; align-items: center; gap: 8px; padding: 5px 20px;
+          border-top: 1px solid rgba(30,30,53,0.5); font-family: var(--font-mono);
+          font-size: 8px; color: #28283c; flex-wrap: wrap;
         }
       `}</style>
     </div>
