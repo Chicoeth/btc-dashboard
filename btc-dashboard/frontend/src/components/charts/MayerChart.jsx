@@ -227,13 +227,13 @@ export default function MayerChart({ priceData, loading, error }) {
       z: 1,
     };
 
-    // Linha laranja simples do Mayer (sem cor por segmento)
+    // Linha cinza do Mayer (padrão igual ao MVRV)
     const mayerLine = {
       type: 'line', name: '__mayer_line__',
       xAxisIndex: 1, yAxisIndex: 1,
       data: data.map(d => [d.date, d.mayer]),
       symbol: 'none', smooth: false,
-      lineStyle: { color: '#f7931a', width: 1.5 },
+      lineStyle: { color: '#9090b0', width: 1.5 },
       emphasis: { disabled: true }, silent: true, z: 5,
     };
 
