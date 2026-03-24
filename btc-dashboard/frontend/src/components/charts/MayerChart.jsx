@@ -24,7 +24,7 @@ function formatDateTooltip(val) {
   return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-/* ─── Mayer color scale (nova) ───
+/* ─── Mayer color scale ───
    ≤ 0.6  → verde puro
    0.6–2.0 → gradiente verde→amarelo→vermelho
    ≥ 2.0  → vermelho puro
@@ -34,19 +34,16 @@ function mayerColor(val, alpha) {
   if (val <= 0.6) {
     r = 0; g = 196; b = 79;
   } else if (val <= 1.0) {
-    // verde → amarelo (0.6 → 1.0)
     const t = (val - 0.6) / 0.4;
     r = Math.round(t * 245);
     g = 196 - Math.round(t * 0);
     b = 79 - Math.round(t * 79);
   } else if (val <= 1.5) {
-    // amarelo → laranja (1.0 → 1.5)
     const t = (val - 1.0) / 0.5;
     r = 245;
     g = 196 - Math.round(t * 96);
     b = 0;
   } else if (val <= 2.0) {
-    // laranja → vermelho (1.5 → 2.0)
     const t = (val - 1.5) / 0.5;
     r = 232;
     g = Math.round(100 * (1 - t));
@@ -58,10 +55,22 @@ function mayerColor(val, alpha) {
   return `rgb(${r},${g},${b})`;
 }
 
-const LEGEND_VALUES = [0, 0.4, 0.6, 0.8, 1.0, 1.2, 1.5, 2.0, 2.5, 3.0];
+/* Legenda: valores e posição % (de cima para baixo, vermelho→verde) */
+const LEGEND_ITEMS = [
+  { val: 3.0, pct: 0  },
+  { val: 2.5, pct: 8  },
+  { val: 2.0, pct: 18 },
+  { val: 1.5, pct: 35 },
+  { val: 1.2, pct: 50 },
+  { val: 1.0, pct: 60 },
+  { val: 0.8, pct: 72 },
+  { val: 0.6, pct: 82 },
+  { val: 0.4, pct: 92 },
+  { val: 0.0, pct: 100 },
+];
 
-/* ─── Build colored line segments (sem area no grid inferior) ─── */
-function buildColoredSegments(rows, gridIndex, priceKey, mayerKey) {
+/* ─── Build colored line segments (preço apenas) ─── */
+function buildColoredPriceSegments(rows) {
   if (!rows.length) return [];
   const THRESHOLD = 0.05;
   const series = [];
@@ -69,23 +78,23 @@ function buildColoredSegments(rows, gridIndex, priceKey, mayerKey) {
 
   for (let i = 1; i <= rows.length; i++) {
     const ended = i === rows.length
-      || Math.abs(rows[i]?.[mayerKey] - rows[i - 1][mayerKey]) > THRESHOLD;
+      || Math.abs(rows[i]?.mayer - rows[i - 1].mayer) > THRESHOLD;
     if (ended) {
       const start = segStart > 0 ? segStart - 1 : segStart;
       if (i - start >= 2) {
-        const avgMayer = Array.from({ length: i - start }, (_, k) => rows[start + k][mayerKey])
+        const avgMayer = Array.from({ length: i - start }, (_, k) => rows[start + k].mayer)
           .reduce((s, v) => s + v, 0) / (i - start);
         series.push({
           type: 'line',
-          xAxisIndex: gridIndex,
-          yAxisIndex: gridIndex,
+          xAxisIndex: 0,
+          yAxisIndex: 0,
           data: Array.from({ length: i - start }, (_, k) => [
             rows[start + k].date,
-            rows[start + k][priceKey],
+            rows[start + k].price,
           ]),
           smooth: false,
           symbol: 'none',
-          lineStyle: { color: mayerColor(avgMayer), width: gridIndex === 0 ? 1.5 : 1.8, cap: 'round' },
+          lineStyle: { color: mayerColor(avgMayer), width: 1.5, cap: 'round' },
           silent: true,
           emphasis: { disabled: true },
           z: 3,
@@ -138,10 +147,9 @@ export default function MayerChart({ priceData, loading, error }) {
   }, [data, activePeriod]);
 
   const coloredPriceSeries = useMemo(
-    () => coloredPrice ? buildColoredSegments(data, 0, 'price', 'mayer') : [],
+    () => coloredPrice ? buildColoredPriceSegments(data) : [],
     [data, coloredPrice]
   );
-  const coloredMayerLine = useMemo(() => buildColoredSegments(data, 1, 'mayer', 'mayer'), [data]);
 
   /* ─── buildOption (useCallback!) ─── */
   const buildOption = useCallback((zoom) => {
@@ -209,7 +217,7 @@ export default function MayerChart({ priceData, loading, error }) {
       emphasis: { disabled: true }, silent: true, z: 2,
     };
 
-    // base Mayer series — invisível, só para tooltip
+    // base Mayer series — invisível, para tooltip
     const baseMayerSeries = {
       type: 'line', name: '__mayer__',
       xAxisIndex: 1, yAxisIndex: 1,
@@ -219,21 +227,21 @@ export default function MayerChart({ priceData, loading, error }) {
       z: 1,
     };
 
-    // Linha cinza do Mayer — visível sempre como base (z:4, abaixo da colorida z:5 se ativa)
-    const mayerGrayLine = {
-      type: 'line', name: '__mayer_gray__',
+    // Linha laranja simples do Mayer (sem cor por segmento)
+    const mayerLine = {
+      type: 'line', name: '__mayer_line__',
       xAxisIndex: 1, yAxisIndex: 1,
       data: data.map(d => [d.date, d.mayer]),
       symbol: 'none', smooth: false,
-      lineStyle: { color: '#9090b0', width: 1.5 },
-      emphasis: { disabled: true }, silent: true, z: 4,
+      lineStyle: { color: '#f7931a', width: 1.5 },
+      emphasis: { disabled: true }, silent: true, z: 5,
     };
 
     return {
       animation: false,
       grid: [
-        { left: 72, right: 48, top: 16, height: '48%' },       // preço — diminuído para dar espaço
-        { left: 72, right: 48, top: '68%', height: '14%' },     // mayer — mais acima
+        { left: 72, right: 48, top: 16, height: '55%' },
+        { left: 72, right: 48, top: '74%', height: '15%' },
       ],
       axisPointer: { link: [{ xAxisIndex: 'all' }] },
       tooltip: {
@@ -335,12 +343,11 @@ export default function MayerChart({ priceData, loading, error }) {
         basePriceSeries,
         sma200Series,
         baseMayerSeries,
-        mayerGrayLine,
+        mayerLine,
         ...(coloredPrice ? coloredPriceSeries : []),
-        ...coloredMayerLine,
       ],
     };
-  }, [data, isLog, coloredPrice, zoomRange, coloredPriceSeries, coloredMayerLine]);
+  }, [data, isLog, coloredPrice, zoomRange, coloredPriceSeries]);
 
   /* ─── init chart ─── */
   useEffect(() => {
@@ -434,13 +441,16 @@ export default function MayerChart({ priceData, loading, error }) {
           <div ref={chartRef} className="echarts-canvas"
             style={{ opacity: loading || error || !data.length ? 0 : 1, height: '520px' }} />
         </div>
+
+        {/* Legenda lateral — barra + labels posicionados ao lado */}
         <div className="legend">
-          <div className="legend-bar" />
-          <div className="legend-labels">
-            {LEGEND_VALUES.map(v => (
-              <div key={v} className="legend-label" style={{ color: mayerColor(v) }}>
-                {v.toFixed(1)}
-              </div>
+          <div className="legend-track">
+            <div className="legend-bar" />
+            {LEGEND_ITEMS.map(item => (
+              <span key={item.val} className="legend-val"
+                style={{ top: `${item.pct}%`, color: mayerColor(item.val) }}>
+                {item.val.toFixed(1)}
+              </span>
             ))}
           </div>
         </div>
@@ -525,29 +535,37 @@ export default function MayerChart({ priceData, loading, error }) {
         }
         @keyframes spin { to { transform:rotate(360deg); } }
 
+        /* Legenda lateral com labels posicionados ao lado da barra */
         .legend {
-          width:36px; display:flex; flex-direction:column; align-items:center;
-          padding:16px 6px 16px 0; gap:0; flex-shrink:0;
+          width:42px; flex-shrink:0;
+          padding:16px 4px 90px 0;
+          display:flex; align-items:stretch;
+        }
+        .legend-track {
+          position:relative; width:100%;
+          display:flex; align-items:stretch;
         }
         .legend-bar {
-          width:8px; flex:1; border-radius:4px;
+          width:8px; flex-shrink:0; border-radius:4px;
           background:linear-gradient(
             to bottom,
             rgb(232,0,10) 0%,
             rgb(232,0,10) 10%,
-            rgb(245,100,0) 35%,
-            rgb(245,196,0) 55%,
+            rgb(245,100,0) 30%,
+            rgb(245,196,0) 50%,
             rgb(0,196,79) 75%,
             rgb(0,196,79) 100%
           );
         }
-        .legend-labels {
-          display:flex; flex-direction:column; align-items:center;
-          margin-top:4px; gap:1px;
-        }
-        .legend-label {
-          font-family:var(--font-mono); font-size:8px; font-weight:500;
-          line-height:1.2;
+        .legend-val {
+          position:absolute;
+          left:14px;
+          transform:translateY(-50%);
+          font-family:var(--font-mono);
+          font-size:9px;
+          font-weight:500;
+          white-space:nowrap;
+          line-height:1;
         }
 
         .chart-footer {
