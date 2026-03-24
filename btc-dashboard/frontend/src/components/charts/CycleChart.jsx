@@ -1,31 +1,28 @@
 /**
- * CycleChart.jsx — Comparador de Ciclos (v2)
- * Correções: média com último valor, legend dinâmica, band de stddev sem stack
+ * CycleChart.jsx — Comparador de Ciclos (v3)
+ * Correções: cores explícitas, eixo Y dinâmico, seletor de período
  */
 
 import { useEffect, useRef, useMemo, useState, useCallback } from 'react';
 
-const CYCLE_COLORS = [
-  '#f7931a', // laranja
-  '#3b82f6', // azul
-  '#22c55e', // verde
-  '#a855f7', // roxo
-  '#ec4899', // rosa
-  '#14b8a6', // teal
-];
-
+// Ciclo atual sempre laranja; demais em ordem fixa
+const PALETTE = ['#3b82f6', '#22c55e', '#a855f7', '#ec4899', '#14b8a6'];
+const ORANGE   = '#f7931a';
 const MEAN_COLOR = '#e8e8f0';
-const BG_COLOR   = '#0a0a0f'; // cor de fundo do site (para masking do stddev)
+const BG_COLOR   = '#0a0a0f';
+
+function getCycleColor(index, total) {
+  if (index === total - 1) return ORANGE; // atual = laranja
+  return PALETTE[index % PALETTE.length];
+}
+
+// ─── Definições de ciclos ──────────────────────────────────────────────────
 
 const ANCHOR_PRICES = {
-  '2011-11-17': 1.99,
-  '2013-12-04': 1240,
-  '2015-01-14': 166.45,
-  '2017-12-17': 19804,
-  '2018-12-15': 3124.5,
-  '2021-11-10': 68997,
-  '2022-11-21': 15473,
-  '2025-10-06': 126219,
+  '2011-11-17': 1.99,   '2013-12-04': 1240,
+  '2015-01-14': 166.45, '2017-12-17': 19804,
+  '2018-12-15': 3124.5, '2021-11-10': 68997,
+  '2022-11-21': 15473,  '2025-10-06': 126219,
 };
 
 const BULL_CYCLES = [
@@ -49,15 +46,17 @@ const HALVING_CYCLES = [
   { label: 'Halving 4 (atual)',start: '2024-04-19', end: null         },
 ];
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
+// Opções de período por modo (dias)
+const PERIOD_OPTIONS = {
+  bull:    [{ label: '1A', days: 365 }, { label: '2A', days: 730 }, { label: '3A', days: 1095 }, { label: 'Todo', days: null }],
+  bear:    [{ label: '100d', days: 100 }, { label: '200d', days: 200 }, { label: '300d', days: 300 }, { label: '400d', days: 400 }, { label: 'Todo', days: null }],
+  halving: [{ label: '1A', days: 365 }, { label: '2A', days: 730 }, { label: '3A', days: 1095 }, { label: '4A', days: 1460 }, { label: 'Todo', days: null }],
+};
 
-function dateToMs(dateStr) {
-  return new Date(dateStr + 'T00:00:00Z').getTime();
-}
+// ─── Helpers ───────────────────────────────────────────────────────────────
 
-function msToDateStr(ms) {
-  return new Date(ms).toISOString().split('T')[0];
-}
+function dateToMs(d)  { return new Date(d + 'T00:00:00Z').getTime(); }
+function msToDate(ms) { return new Date(ms).toISOString().split('T')[0]; }
 
 function fmtMultiple(v) {
   if (v >= 100) return v.toFixed(0) + 'x';
@@ -67,7 +66,7 @@ function fmtMultiple(v) {
 
 function buildPriceMap(priceData) {
   const map = new Map();
-  for (const [ts, close] of priceData) map.set(msToDateStr(ts), close);
+  for (const [ts, close] of priceData) map.set(msToDate(ts), close);
   for (const [date, price] of Object.entries(ANCHOR_PRICES)) map.set(date, price);
   return map;
 }
@@ -87,27 +86,19 @@ function buildCycleSeries(priceData, priceMap, startDate, endDate, startPrice) {
   const startMs = dateToMs(startDate);
   const endMs   = endDate ? dateToMs(endDate) : Date.now();
   const points  = [[0, 1.0]];
-
   for (const [ts, close] of priceData) {
     if (ts < startMs) continue;
     if (ts > endMs)   break;
-    const dayN = Math.round((ts - startMs) / 86400000);
-    if (dayN === 0) continue;
-    points.push([dayN, close / startPrice]);
+    const d = Math.round((ts - startMs) / 86400000);
+    if (d === 0) continue;
+    points.push([d, close / startPrice]);
   }
-
   if (endDate) {
-    const endPrice = getPrice(priceMap, endDate, priceData);
-    if (endPrice) {
-      const dayN = Math.round((dateToMs(endDate) - startMs) / 86400000);
-      points.push([dayN, endPrice / startPrice]);
-    }
+    const ep = getPrice(priceMap, endDate, priceData);
+    if (ep) points.push([Math.round((dateToMs(endDate) - startMs) / 86400000), ep / startPrice]);
   }
-
   const seen = new Set();
-  return points
-    .filter(([d]) => { if (seen.has(d)) return false; seen.add(d); return true; })
-    .sort((a, b) => a[0] - b[0]);
+  return points.filter(([d]) => { if (seen.has(d)) return false; seen.add(d); return true; }).sort((a, b) => a[0] - b[0]);
 }
 
 function buildHalvingSeries(priceData, priceMap, startDate, endDate) {
@@ -115,97 +106,67 @@ function buildHalvingSeries(priceData, priceMap, startDate, endDate) {
   const endMs      = endDate ? dateToMs(endDate) : Date.now();
   const startPrice = getPrice(priceMap, startDate, priceData);
   if (!startPrice) return [];
-
   const points = [[0, 1.0]];
-
   for (const [ts, close] of priceData) {
     if (ts < startMs) continue;
     if (ts > endMs)   break;
-    const dayN = Math.round((ts - startMs) / 86400000);
-    if (dayN === 0) continue;
-    points.push([dayN, close / startPrice]);
+    const d = Math.round((ts - startMs) / 86400000);
+    if (d === 0) continue;
+    points.push([d, close / startPrice]);
   }
-
   if (endDate) {
-    const endPrice = getPrice(priceMap, endDate, priceData);
-    if (endPrice) {
-      const dayN = Math.round((dateToMs(endDate) - startMs) / 86400000);
-      points.push([dayN, endPrice / startPrice]);
-    }
+    const ep = getPrice(priceMap, endDate, priceData);
+    if (ep) points.push([Math.round((dateToMs(endDate) - startMs) / 86400000), ep / startPrice]);
   }
-
   const seen = new Set();
-  return points
-    .filter(([d]) => { if (seen.has(d)) return false; seen.add(d); return true; })
-    .sort((a, b) => a[0] - b[0]);
+  return points.filter(([d]) => { if (seen.has(d)) return false; seen.add(d); return true; }).sort((a, b) => a[0] - b[0]);
 }
 
-/**
- * Calcula média e +/-1σ dia a dia.
- *
- * FIX 1: quando um ciclo termina antes do maxDay, continuamos usando seu
- * ÚLTIMO valor conhecido — evita o "spike" que ocorria quando o ciclo
- * saía abruptamente do cálculo da média.
- */
+// Calcula média e ±1σ. Ciclos terminados mantêm último valor (evita spikes).
 function buildMeanStdDev(seriesList) {
   const valid = seriesList.filter(s => s.length > 0);
   if (!valid.length) return { mean: [], upper: [], lower: [] };
-
   const maxDay = Math.max(...valid.map(s => s[s.length - 1][0]));
   const mean = [], upper = [], lower = [];
-
   for (let d = 0; d <= maxDay; d++) {
     const vals = valid.map(series => {
       const exact = series.find(p => p[0] === d);
       if (exact) return exact[1];
-
       let before = null, after = null;
-      for (const p of series) {
-        if (p[0] <= d) before = p;
-        else if (after === null) after = p;
-      }
-
+      for (const p of series) { if (p[0] <= d) before = p; else if (!after) after = p; }
       if (!before && !after) return null;
       if (!before) return after[1];
-      // FIX: se o ciclo terminou, mantém o último valor em vez de retornar null
-      if (!after) return before[1];
-
+      if (!after)  return before[1]; // mantém último valor
       const t = (d - before[0]) / (after[0] - before[0]);
       return before[1] + t * (after[1] - before[1]);
     }).filter(v => v !== null);
-
     if (!vals.length) continue;
-
     const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
-    const std = vals.length > 1
-      ? Math.sqrt(vals.reduce((s, v) => s + (v - avg) ** 2, 0) / vals.length)
-      : 0;
-
+    const std = vals.length > 1 ? Math.sqrt(vals.reduce((s, v) => s + (v - avg) ** 2, 0) / vals.length) : 0;
     mean.push([d, avg]);
     upper.push([d, avg + std]);
-    lower.push([d, Math.max(0.001, avg - std)]); // clamp para log scale
+    lower.push([d, Math.max(0.001, avg - std)]);
   }
-
   return { mean, upper, lower };
 }
 
-// ─── Componente ──────────────────────────────────────────────────────────────
+// ─── Componente ────────────────────────────────────────────────────────────
 
 export default function CycleChart({ priceData, loading, error }) {
   const chartRef  = useRef(null);
   const chartInst = useRef(null);
 
-  const [mode, setMode]                   = useState('halving');
-  const [showMean, setShowMean]           = useState(false);
-  const [showStd,  setShowStd]            = useState(false);
-  const [echartsReady, setEchartsReady]   = useState(false);
-  // FIX 3: rastreia quais séries estão visíveis (para recalcular a média)
+  const [mode, setMode]                     = useState('halving');
+  const [showMean, setShowMean]             = useState(false);
+  const [showStd,  setShowStd]              = useState(false);
+  const [echartsReady, setEchartsReady]     = useState(false);
   const [legendSelected, setLegendSelected] = useState({});
+  const [xPeriod, setXPeriod]               = useState(null); // null = Todo
 
   useEffect(() => { import('echarts').then(() => setEchartsReady(true)); }, []);
 
-  // Reseta seleção da legenda ao trocar de modo
-  useEffect(() => { setLegendSelected({}); }, [mode]);
+  // Reseta ao trocar de modo
+  useEffect(() => { setLegendSelected({}); setXPeriod(null); }, [mode]);
 
   const priceMap = useMemo(() => {
     if (!priceData?.length) return new Map();
@@ -214,59 +175,66 @@ export default function CycleChart({ priceData, loading, error }) {
 
   const { cycleDefs, seriesList } = useMemo(() => {
     if (!priceData?.length) return { cycleDefs: [], seriesList: [] };
-    if (mode === 'bull') {
-      return {
-        cycleDefs: BULL_CYCLES,
-        seriesList: BULL_CYCLES.map(c => buildCycleSeries(priceData, priceMap, c.start, c.end, c.startPrice)),
-      };
-    }
-    if (mode === 'bear') {
-      return {
-        cycleDefs: BEAR_CYCLES,
-        seriesList: BEAR_CYCLES.map(c => buildCycleSeries(priceData, priceMap, c.start, c.end, c.startPrice)),
-      };
-    }
-    return {
-      cycleDefs: HALVING_CYCLES,
-      seriesList: HALVING_CYCLES.map(c => buildHalvingSeries(priceData, priceMap, c.start, c.end)),
-    };
+    if (mode === 'bull')    return { cycleDefs: BULL_CYCLES,    seriesList: BULL_CYCLES.map(c    => buildCycleSeries(priceData, priceMap, c.start, c.end, c.startPrice)) };
+    if (mode === 'bear')    return { cycleDefs: BEAR_CYCLES,    seriesList: BEAR_CYCLES.map(c    => buildCycleSeries(priceData, priceMap, c.start, c.end, c.startPrice)) };
+    return                         { cycleDefs: HALVING_CYCLES, seriesList: HALVING_CYCLES.map(c => buildHalvingSeries(priceData, priceMap, c.start, c.end)) };
   }, [priceData, priceMap, mode]);
 
-  // FIX 3: filtra ciclos escondidos na legenda antes de calcular a média
   const { mean, upper, lower } = useMemo(() => {
     if (!showMean || seriesList.length < 2) return { mean: [], upper: [], lower: [] };
-
-    const previousDefs   = cycleDefs.slice(0, -1);
-    const previousSeries = seriesList.slice(0, -1);
-
-    const activeSeries = previousSeries.filter((_, i) => {
-      const label = previousDefs[i]?.label;
-      return !label || legendSelected[label] !== false;
-    });
-
-    if (!activeSeries.length) return { mean: [], upper: [], lower: [] };
-    return buildMeanStdDev(activeSeries);
+    const prevDefs   = cycleDefs.slice(0, -1);
+    const prevSeries = seriesList.slice(0, -1);
+    const active = prevSeries.filter((_, i) => legendSelected[prevDefs[i]?.label] !== false);
+    if (!active.length) return { mean: [], upper: [], lower: [] };
+    return buildMeanStdDev(active);
   }, [seriesList, cycleDefs, showMean, legendSelected]);
 
   const buildOption = useCallback(() => {
     if (!priceData?.length || !cycleDefs.length) return null;
 
-    // FIX 5: limita o eixo X ao máximo das séries principais (sem stddev)
-    const xMax = Math.max(...seriesList.map(s => s[s.length - 1]?.[0] ?? 0));
+    const total = cycleDefs.length;
 
-    const mainSeries = cycleDefs.map((c, i) => ({
-      type: 'line',
-      name: c.label,
-      data: seriesList[i].map(([d, v]) => [d, v]),
-      smooth: false,
-      symbol: 'none',
-      lineStyle: {
-        color: CYCLE_COLORS[i % CYCLE_COLORS.length],
-        width: i === cycleDefs.length - 1 ? 2.5 : 1.8,
-      },
-      emphasis: { disabled: true },
-      z: i === cycleDefs.length - 1 ? 5 : 3,
-    }));
+    // ── Limites do eixo X ──
+    const xMaxData = Math.max(...seriesList.map(s => s[s.length - 1]?.[0] ?? 0));
+    const xMax = xPeriod != null ? xPeriod : xMaxData + Math.round(xMaxData * 0.02);
+
+    // ── Limites do eixo Y (apenas séries visíveis e dentro do xPeriod) ──
+    let yMin = Infinity, yMax = -Infinity;
+    cycleDefs.forEach((c, i) => {
+      if (legendSelected[c.label] === false) return;
+      for (const [d, v] of seriesList[i]) {
+        if (d > xMax) break;
+        if (v > 0) { yMin = Math.min(yMin, v); yMax = Math.max(yMax, v); }
+      }
+    });
+    if (showMean && mean.length) {
+      for (const [d, v] of mean) {
+        if (d > xMax) break;
+        yMin = Math.min(yMin, v); yMax = Math.max(yMax, v);
+      }
+    }
+    if (!isFinite(yMin)) { yMin = 0.5; yMax = 10; }
+
+    // ── Séries principais ──
+    const mainSeries = cycleDefs.map((c, i) => {
+      const color = getCycleColor(i, total);
+      return {
+        type: 'line',
+        name: c.label,
+        // color aqui é a propriedade top-level que o ECharts usa para o ícone da legenda
+        color,
+        data: seriesList[i].map(([d, v]) => [d, v]),
+        smooth: false,
+        symbol: 'none',
+        lineStyle: {
+          color,
+          width: i === total - 1 ? 2 : 1.2, // atual levemente mais grossa; média terá 2.5
+        },
+        itemStyle: { color },
+        emphasis: { disabled: true },
+        z: i === total - 1 ? 5 : 3,
+      };
+    });
 
     const extraSeries = [];
 
@@ -274,44 +242,40 @@ export default function CycleChart({ priceData, loading, error }) {
       extraSeries.push({
         type: 'line',
         name: 'Média',
+        color: MEAN_COLOR,
         data: mean.map(([d, v]) => [d, v]),
         smooth: false,
         symbol: 'none',
-        lineStyle: { color: MEAN_COLOR, width: 2, type: 'dashed' },
-        z: 6,
+        lineStyle: { color: MEAN_COLOR, width: 2.5, type: 'dashed' },
+        itemStyle: { color: MEAN_COLOR },
         emphasis: { disabled: true },
+        z: 6,
       });
 
-      // FIX 5: stddev band sem stack (funciona com escala log)
-      // Técnica: upper preenche para baixo com cor transparente,
-      // lower preenche para baixo com cor de FUNDO OPACA — apaga a parte de baixo
-      // Resultado visual: só a faixa entre lower e upper fica colorida
       if (showStd && upper.length && lower.length) {
+        // Técnica de masking: upper preenche para baixo com cor transparente,
+        // lower preenche para baixo com a cor de fundo (apaga a parte abaixo)
         extraSeries.push({
           type: 'line',
           name: '__std_upper__',
+          color: 'transparent',
           data: upper.map(([d, v]) => [d, v]),
-          smooth: false,
-          symbol: 'none',
+          smooth: false, symbol: 'none',
           lineStyle: { color: 'rgba(232,232,240,0.3)', width: 1 },
           areaStyle: { color: 'rgba(232,232,240,0.1)', origin: 'auto' },
-          z: 1,
-          silent: true,
-          emphasis: { disabled: true },
-          legendHoverLink: false,
+          itemStyle: { color: 'transparent' },
+          z: 1, silent: true, emphasis: { disabled: true }, legendHoverLink: false,
         });
         extraSeries.push({
           type: 'line',
           name: '__std_lower__',
+          color: 'transparent',
           data: lower.map(([d, v]) => [d, v]),
-          smooth: false,
-          symbol: 'none',
+          smooth: false, symbol: 'none',
           lineStyle: { color: 'rgba(232,232,240,0.3)', width: 1 },
           areaStyle: { color: BG_COLOR, origin: 'auto' },
-          z: 2,
-          silent: true,
-          emphasis: { disabled: true },
-          legendHoverLink: false,
+          itemStyle: { color: 'transparent' },
+          z: 2, silent: true, emphasis: { disabled: true }, legendHoverLink: false,
         });
       }
     }
@@ -331,10 +295,9 @@ export default function CycleChart({ priceData, loading, error }) {
         textStyle: { color: '#9090b0', fontFamily: 'JetBrains Mono, monospace', fontSize: 10 },
         pageButtonItemGap: 5,
         pageTextStyle: { color: '#5a5a80', fontFamily: 'JetBrains Mono, monospace', fontSize: 10 },
-        formatter: name => (name.startsWith('__') ? null : name),
+        formatter: name => name.startsWith('__') ? null : name,
         selectedMode: true,
-        // Preserva o estado visual (visível/oculto) após cada re-render
-        selected: legendSelected,
+        selected: legendSelected, // preserva o estado visual após re-render
       },
       tooltip: {
         trigger: 'axis',
@@ -374,8 +337,7 @@ export default function CycleChart({ priceData, loading, error }) {
         axisLabel: { color: '#5a5a80', fontFamily: 'JetBrains Mono, monospace', fontSize: 10 },
         splitLine: { lineStyle: { color: '#1e1e35', type: 'dashed' } },
         min: 0,
-        // FIX 5: limita ao máximo das séries principais — evita o eixo se expandir por causa do stddev
-        max: xMax + Math.round(xMax * 0.03),
+        max: xMax,
       },
       yAxis: {
         type: 'log',
@@ -398,11 +360,13 @@ export default function CycleChart({ priceData, loading, error }) {
           },
         },
         splitLine: { lineStyle: { color: '#1e1e35', type: 'dashed' } },
-        min: value => Math.max(0.001, value.min * 0.8),
+        // Dinâmico: ajusta ao range das séries visíveis
+        min: Math.max(0.001, yMin * 0.75),
+        max: yMax * 1.3,
       },
       series: [...mainSeries, ...extraSeries],
     };
-  }, [cycleDefs, seriesList, showMean, showStd, mean, upper, lower, priceData, legendSelected]);
+  }, [cycleDefs, seriesList, showMean, showStd, mean, upper, lower, priceData, legendSelected, xPeriod]);
 
   // ── Init ──
   useEffect(() => {
@@ -413,11 +377,7 @@ export default function CycleChart({ priceData, loading, error }) {
         const chart = echarts.init(chartRef.current, null, { renderer: 'canvas' });
         chartInst.current = chart;
         new ResizeObserver(() => chart.resize()).observe(chartRef.current);
-
-        // FIX 3: recalcula média ao clicar na legenda
-        chart.on('legendselectchanged', params => {
-          setLegendSelected({ ...params.selected });
-        });
+        chart.on('legendselectchanged', params => setLegendSelected({ ...params.selected }));
       }
       const option = buildOption();
       if (option) chartInst.current.setOption(option, { notMerge: true });
@@ -434,8 +394,9 @@ export default function CycleChart({ priceData, loading, error }) {
     if (option) chart.setOption(option, { notMerge: true });
   }, [buildOption]);
 
-  const hasData       = priceData?.length > 0;
-  const currentCycle  = cycleDefs[cycleDefs.length - 1];
+  const hasData      = priceData?.length > 0;
+  const currentCycle = cycleDefs[cycleDefs.length - 1];
+  const periods      = PERIOD_OPTIONS[mode] ?? PERIOD_OPTIONS.halving;
 
   return (
     <div className="cycle-chart-wrapper">
@@ -453,7 +414,7 @@ export default function CycleChart({ priceData, loading, error }) {
         </button>
       </div>
 
-      {/* Header — FIX 4: sem badges de dias/máx */}
+      {/* Header */}
       <div className="chart-header">
         <div className="chart-left">
           {currentCycle && (
@@ -465,23 +426,38 @@ export default function CycleChart({ priceData, loading, error }) {
             </>
           )}
         </div>
-        <div className="chart-controls">
-          <label className={`check-box ${showMean ? 'active' : ''}`}>
-            <input type="checkbox" checked={showMean} onChange={e => { setShowMean(e.target.checked); if (!e.target.checked) setShowStd(false); }} />
-            <span className="check-indicator" />
-            Adicionar Média
-          </label>
-          {showMean && (
-            <label className={`check-box ${showStd ? 'active' : ''}`}>
-              <input type="checkbox" checked={showStd} onChange={e => setShowStd(e.target.checked)} />
+        <div className="chart-right">
+          {/* Seletor de período */}
+          <div className="period-btns">
+            {periods.map(p => (
+              <button
+                key={p.label}
+                className={`period-btn ${xPeriod === p.days ? 'active' : ''}`}
+                onClick={() => setXPeriod(p.days)}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+          {/* Checkboxes */}
+          <div className="chart-controls">
+            <label className={`check-box ${showMean ? 'active' : ''}`}>
+              <input type="checkbox" checked={showMean} onChange={e => { setShowMean(e.target.checked); if (!e.target.checked) setShowStd(false); }} />
               <span className="check-indicator" />
-              ±1 Desvio Padrão
+              Adicionar Média
             </label>
-          )}
+            {showMean && (
+              <label className={`check-box ${showStd ? 'active' : ''}`}>
+                <input type="checkbox" checked={showStd} onChange={e => setShowStd(e.target.checked)} />
+                <span className="check-indicator" />
+                ±1 Desvio Padrão
+              </label>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Chart — inline style para garantir height */}
+      {/* Chart */}
       <div style={{ position: 'relative', height: '520px' }}>
         {(loading || error || !hasData) && (
           <div className="chart-state">
@@ -492,12 +468,7 @@ export default function CycleChart({ priceData, loading, error }) {
         )}
         <div
           ref={chartRef}
-          style={{
-            width: '100%',
-            height: '520px',
-            opacity: (loading || error || !hasData) ? 0 : 1,
-            transition: 'opacity 0.3s',
-          }}
+          style={{ width: '100%', height: '520px', opacity: (loading || error || !hasData) ? 0 : 1, transition: 'opacity 0.3s' }}
         />
       </div>
 
@@ -517,10 +488,9 @@ export default function CycleChart({ priceData, loading, error }) {
         .mode-selector { display: flex; gap: 8px; padding: 16px 20px 0; flex-wrap: wrap; }
         .mode-btn {
           display: flex; align-items: center; gap: 7px; padding: 9px 16px;
-          font-family: var(--font-mono); font-size: 11px; font-weight: 500;
-          letter-spacing: 0.03em; color: var(--text-muted);
-          background: rgba(255,255,255,0.02); border: 1px solid var(--border-subtle);
-          border-radius: 8px; cursor: pointer; transition: all 0.15s;
+          font-family: var(--font-mono); font-size: 11px; font-weight: 500; letter-spacing: 0.03em;
+          color: var(--text-muted); background: rgba(255,255,255,0.02);
+          border: 1px solid var(--border-subtle); border-radius: 8px; cursor: pointer; transition: all 0.15s;
         }
         .mode-btn:hover { color: var(--text-primary); background: rgba(255,255,255,0.05); border-color: var(--border-default); }
         .mode-btn.active { color: var(--brand-orange); background: rgba(247,147,26,0.08); border-color: rgba(247,147,26,0.3); }
@@ -531,16 +501,23 @@ export default function CycleChart({ priceData, loading, error }) {
           padding: 12px 20px 10px; border-bottom: 1px solid var(--border-subtle);
           flex-wrap: wrap; gap: 10px; margin-top: 12px;
         }
-        .chart-left { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-        .cycle-label {
-          font-family: var(--font-mono); font-size: 10px; color: var(--text-muted);
-          letter-spacing: 0.06em; text-transform: uppercase;
-        }
-        .cycle-name {
-          font-family: var(--font-display); font-size: 18px; font-weight: 700;
-          color: var(--text-primary); letter-spacing: -0.01em;
-        }
+        .chart-left { display: flex; align-items: baseline; gap: 10px; }
+        .chart-right { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 
+        .cycle-label { font-family: var(--font-mono); font-size: 10px; color: var(--text-muted); letter-spacing: 0.06em; text-transform: uppercase; }
+        .cycle-name  { font-family: var(--font-display); font-size: 18px; font-weight: 700; color: var(--text-primary); letter-spacing: -0.01em; }
+
+        /* Seletor de período */
+        .period-btns { display: flex; gap: 4px; }
+        .period-btn {
+          padding: 4px 10px; font-family: var(--font-mono); font-size: 10px; font-weight: 500;
+          letter-spacing: 0.04em; color: var(--text-muted); background: transparent;
+          border: 1px solid var(--border-subtle); border-radius: 4px; cursor: pointer; transition: all 0.15s;
+        }
+        .period-btn:hover  { color: var(--text-primary); border-color: var(--border-default); }
+        .period-btn.active { color: var(--brand-orange); border-color: rgba(247,147,26,0.4); background: rgba(247,147,26,0.06); }
+
+        /* Checkboxes */
         .chart-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
         .check-box {
           display: flex; align-items: center; gap: 7px; padding: 6px 12px;
@@ -553,9 +530,8 @@ export default function CycleChart({ priceData, loading, error }) {
         .check-box.active { color: var(--text-primary); border-color: rgba(247,147,26,0.3); background: rgba(247,147,26,0.06); }
         .check-box input { display: none; }
         .check-indicator {
-          display: inline-block; width: 12px; height: 12px;
-          border: 1px solid var(--border-default); border-radius: 3px;
-          position: relative; flex-shrink: 0; transition: all 0.15s;
+          display: inline-block; width: 12px; height: 12px; border: 1px solid var(--border-default);
+          border-radius: 3px; position: relative; flex-shrink: 0; transition: all 0.15s;
         }
         .check-box.active .check-indicator { background: var(--brand-orange); border-color: var(--brand-orange); }
         .check-box.active .check-indicator::after {
@@ -570,8 +546,7 @@ export default function CycleChart({ priceData, loading, error }) {
         }
         .spinner {
           width: 24px; height: 24px; border: 2px solid var(--border-subtle);
-          border-top-color: var(--brand-orange); border-radius: 50%;
-          animation: spin 0.8s linear infinite;
+          border-top-color: var(--brand-orange); border-radius: 50%; animation: spin 0.8s linear infinite;
         }
         @keyframes spin { to { transform: rotate(360deg); } }
 
