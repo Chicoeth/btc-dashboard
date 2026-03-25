@@ -17,26 +17,41 @@ const formatPriceFull = v => v >= 1000 ? '$' + v.toLocaleString('en-US', {maximu
 
 /**
  * STH MVRV color scale:
- *   < 0.8  → green  (deep undervaluation for STH)
- *   0.8–1.0 → green→yellow
- *   1.0–2.0 → yellow→red
- *   > 2.0  → red    (STH euphoria)
+ *   ≤ 0.75 → verde puro (#00c44f)
+ *   0.75 → 1.35 → gradiente verde → amarelo → vermelho
+ *   ≥ 1.35 → vermelho puro (#e8000a)
  */
-function sthMvrvColor(mvrv, alpha) {
+const STH_COLOR_LOW  = 0.75;
+const STH_COLOR_HIGH = 1.35;
+const C_GREEN  = [0, 196, 79];
+const C_YELLOW = [245, 196, 0];
+const C_RED    = [232, 0, 10];
+
+function sthMvrvColor(value, alpha) {
   let r, g, b;
-  if (mvrv <= 0.8) {
-    r = 0; g = 196; b = 79;
-  } else if (mvrv <= 1.0) {
-    const t = (mvrv - 0.8) / 0.2;
-    r = Math.round(t * 245); g = Math.round(196 + t * (196 - 196)); b = Math.round(79 * (1 - t));
-  } else if (mvrv <= 2.0) {
-    const t = (mvrv - 1.0) / 1.0;
-    r = Math.round(245 + t * (232 - 245)); g = Math.round(196 * (1 - t)); b = Math.round(t * 10);
+  if (value <= STH_COLOR_LOW) {
+    [r, g, b] = C_GREEN;
+  } else if (value >= STH_COLOR_HIGH) {
+    [r, g, b] = C_RED;
   } else {
-    r = 232; g = 0; b = 10;
+    const t = (value - STH_COLOR_LOW) / (STH_COLOR_HIGH - STH_COLOR_LOW);
+    if (t <= 0.5) {
+      const s = t / 0.5;
+      r = Math.round(C_GREEN[0]  + (C_YELLOW[0] - C_GREEN[0])  * s);
+      g = Math.round(C_GREEN[1]  + (C_YELLOW[1] - C_GREEN[1])  * s);
+      b = Math.round(C_GREEN[2]  + (C_YELLOW[2] - C_GREEN[2])  * s);
+    } else {
+      const s = (t - 0.5) / 0.5;
+      r = Math.round(C_YELLOW[0] + (C_RED[0] - C_YELLOW[0]) * s);
+      g = Math.round(C_YELLOW[1] + (C_RED[1] - C_YELLOW[1]) * s);
+      b = Math.round(C_YELLOW[2] + (C_RED[2] - C_YELLOW[2]) * s);
+    }
   }
   return alpha !== undefined ? `rgba(${r},${g},${b},${alpha})` : `rgb(${r},${g},${b})`;
 }
+
+// Legenda lateral: valores e cores
+const LEGEND_VALUES = [2.0, 1.35, 1.0, 0.75, 0.0];
 
 /* ─── build colored price segments (by STH MVRV value) ─── */
 function buildColoredSegments(data, gridIndex, valueIndex) {
@@ -175,6 +190,13 @@ export default function STHMVRVChart({ sthMvrvData, loading, error }) {
       }
     }
 
+    // Dynamic bounds for STH MVRV Y axis based on visible data
+    const i0s = Math.floor((z.start / 100) * (data.length - 1));
+    const i1s = Math.ceil((z.end   / 100) * (data.length - 1));
+    const visMvrv = data.slice(i0s, i1s + 1).map(d => d[3]).filter(v => v > 0);
+    const mvrvMin = visMvrv.length ? Math.max(0, Math.min(...visMvrv) - 0.1) : 0;
+    const mvrvMax = visMvrv.length ? Math.max(...visMvrv) + 0.15 : 4;
+
     const basePriceSeries = {
       type: 'line', name: '__price__',
       xAxisIndex: 0, yAxisIndex: 0,
@@ -288,7 +310,7 @@ export default function STHMVRVChart({ sthMvrvData, loading, error }) {
           splitLine: { lineStyle: { color: '#1e1e35', type: 'dashed' } },
         },
         {
-          type: 'value', min: 0, max: 4,
+          type: 'value', min: mvrvMin, max: mvrvMax,
           gridIndex: 1,
           name: 'STH MVRV', nameLocation: 'middle', nameGap: 56,
           nameTextStyle: { color: '#5a5a80', fontFamily: 'JetBrains Mono, monospace', fontSize: 11 },
@@ -298,7 +320,6 @@ export default function STHMVRVChart({ sthMvrvData, loading, error }) {
             formatter: v => v.toFixed(1),
           },
           splitLine: { lineStyle: { color: '#1e1e35', type: 'dashed' } },
-          interval: 1,
         },
       ],
       dataZoom: [
@@ -468,40 +489,55 @@ export default function STHMVRVChart({ sthMvrvData, loading, error }) {
             style={{ opacity: loading || error || !data.length ? 0 : 1, height: '520px' }} />
         </div>
 
-        {/* Legenda lateral */}
-        <div className="legend-bar-wrap">
-          <div className="legend-bar">
-            <div className="bar-gradient" />
-            <span className="bar-label" style={{ top: '0%' }}>3.0</span>
-            <span className="bar-label" style={{ top: '33%' }}>2.0</span>
-            <span className="bar-label" style={{ top: '60%' }}>1.0</span>
-            <span className="bar-label" style={{ top: '73%' }}>0.8</span>
-            <span className="bar-label" style={{ top: '100%' }}>0.0</span>
+        {/* Legenda lateral — estilo MVRV */}
+        <div className="legend">
+          <div className="legend-bar" />
+          <div className="legend-labels">
+            {LEGEND_VALUES.map(v => (
+              <div key={v} className="legend-label" style={{ color: sthMvrvColor(v) }}>
+                {v.toFixed(1)}
+              </div>
+            ))}
           </div>
         </div>
       </div>
 
+      {data.length > 0 && (
+        <div className="chart-footer">
+          <span>{data.length.toLocaleString('pt-BR')} dias de dados</span>
+          <span>·</span>
+          <span>
+            {new Date(data[0][0]).toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })}
+            {' → '}
+            {new Date(data[data.length - 1][0]).toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })}
+          </span>
+          <span>·</span>
+          <span>Fonte: CheckOnChain</span>
+        </div>
+      )}
+
       <style jsx>{`
         .sth-mvrv-chart-wrapper {
-          display: flex; flex-direction: column;
+          display: flex; flex-direction: column; height: 100%;
         }
         .chart-header {
-          display: flex; justify-content: space-between; align-items: center;
-          padding: 12px 16px 8px; flex-wrap: wrap; gap: 8px;
+          display: flex; align-items: center; justify-content: space-between;
+          padding: 14px 20px 12px; border-bottom: 1px solid var(--border-subtle);
+          flex-wrap: wrap; gap: 10px;
         }
-        .chart-left { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .chart-left { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
         .price-display {
-          font-family: var(--font-display); font-size: 20px; font-weight: 700;
-          color: var(--text-primary);
+          font-family: var(--font-display); font-size: 22px; font-weight: 700;
+          color: var(--text-primary); letter-spacing: -0.02em;
         }
         .mvrv-badge {
-          font-family: var(--font-mono); font-size: 11px; font-weight: 600;
-          padding: 3px 8px; border-radius: 4px; border: 1px solid;
+          font-family: var(--font-mono); font-size: 12px; font-weight: 600;
+          padding: 3px 10px; border-radius: 20px; border: 1px solid; letter-spacing: 0.03em;
         }
         .realized-label {
-          font-family: var(--font-mono); font-size: 11px; color: var(--text-muted);
+          font-family: var(--font-mono); font-size: 11px; color: #7878c0;
         }
-        .realized-label strong { color: #7878c0; }
+        .realized-label strong { color: #9090c8; font-weight: 600; }
         .chart-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
         .period-selector { display: flex; gap: 2px; }
         .period-btn {
@@ -523,8 +559,8 @@ export default function STHMVRVChart({ sthMvrvData, loading, error }) {
         }
         .scale-btn:hover { color: var(--text-secondary); }
         .scale-btn.active { color: var(--brand-orange); background: rgba(247,147,26,0.1); }
-        .chart-body { display: flex; position: relative; }
-        .chart-area { flex: 1; min-width: 0; position: relative; }
+        .chart-body { flex:1; display: flex; min-height:0; }
+        .chart-area { flex: 1; position: relative; min-height: 520px; }
         .chart-state {
           position: absolute; inset: 0; display: flex; flex-direction: column;
           align-items: center; justify-content: center; gap: 8px;
@@ -537,28 +573,26 @@ export default function STHMVRVChart({ sthMvrvData, loading, error }) {
         }
         @keyframes spin { to { transform: rotate(360deg); } }
         .echarts-canvas { width: 100%; }
-        .legend-bar-wrap {
-          width: 40px; flex-shrink: 0; display: flex; align-items: center;
-          justify-content: center; padding: 16px 0 80px;
+        .legend {
+          display:flex; flex-direction:row; align-items:stretch;
+          padding:16px 8px 84px 4px; gap:4px; flex-shrink:0;
         }
         .legend-bar {
-          position: relative; width: 10px; height: 180px;
-        }
-        .bar-gradient {
-          width: 10px; height: 100%; border-radius: 5px;
-          background: linear-gradient(
-            to bottom,
-            rgb(232,0,10) 0%,
-            rgb(232,0,10) 10%,
-            rgb(245,196,0) 50%,
-            rgb(0,196,79) 73%,
-            rgb(0,196,79) 100%
+          width:10px; border-radius:5px; flex-shrink:0; height:100%;
+          background:linear-gradient(to bottom,
+            #e8000a 0%,        /* 2.0 — vermelho */
+            #e8000a 15%,       /* 1.35 — vermelho */
+            #f5c400 50%,       /* ~1.05 — amarelo */
+            #00c44f 75%,       /* 0.75 — verde   */
+            #00c44f 100%       /* 0.0  — verde   */
           );
         }
-        .bar-label {
-          position: absolute; left: 16px; transform: translateY(-50%);
-          font-family: var(--font-mono); font-size: 9px; color: var(--text-muted);
-          white-space: nowrap;
+        .legend-labels { display:flex; flex-direction:column; justify-content:space-between; height:100%; }
+        .legend-label { font-family:var(--font-mono); font-size:9px; font-weight:500; line-height:1; }
+        .chart-footer {
+          display:flex; align-items:center; gap:8px;
+          padding:8px 20px; font-family:var(--font-mono);
+          font-size:8px; color:#28283c;
         }
       `}</style>
     </div>
