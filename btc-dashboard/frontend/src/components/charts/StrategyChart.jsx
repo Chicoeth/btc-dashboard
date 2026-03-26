@@ -27,6 +27,7 @@ export default function StrategyChart({ strategyData, priceData, loading, error 
   const [isLog, setIsLog]               = useState(true);
   const [showHoldings, setShowHoldings]  = useState(true);
   const [showMvrv, setShowMvrv]          = useState(false);
+  const [showBuys, setShowBuys]          = useState(false);
   const [activePeriod, setActivePeriod]  = useState('Todo');
   const [echartsReady, setEchartsReady]  = useState(false);
   const [currentZoom, setCurrentZoom]    = useState({ start: 0, end: 100 });
@@ -68,6 +69,35 @@ export default function StrategyChart({ strategyData, priceData, loading, error 
 
     return result;
   }, [strategyData, priceData]);
+
+  // Compute purchase events: each time holdings increased between snapshots
+  const purchases = useMemo(() => {
+    if (!Array.isArray(strategyData) || strategyData.length < 2) return new Map();
+    const sorted = [...strategyData].sort((a, b) => a[0] - b[0]);
+    const buyMap = new Map(); // date string → { btcBought, priceAtBuy }
+    let maxBuy = 0;
+
+    for (let i = 1; i < sorted.length; i++) {
+      const prev = sorted[i - 1];
+      const curr = sorted[i];
+      const btcBought = curr[1] - prev[1];
+      if (btcBought > 0) {
+        const dateStr = new Date(curr[0]).toISOString().split('T')[0];
+        buyMap.set(dateStr, btcBought);
+        if (btcBought > maxBuy) maxBuy = btcBought;
+      }
+    }
+    // Also mark the first purchase
+    if (sorted.length > 0) {
+      const first = sorted[0];
+      const dateStr = new Date(first[0]).toISOString().split('T')[0];
+      buyMap.set(dateStr, first[1]);
+      if (first[1] > maxBuy) maxBuy = first[1];
+    }
+    // Store maxBuy on the map for symbol size scaling
+    buyMap._maxBuy = maxBuy;
+    return buyMap;
+  }, [strategyData]);
 
   const zoomRange = useMemo(() => {
     if (!data.length) return { start: 0, end: 100 };
@@ -174,6 +204,41 @@ export default function StrategyChart({ strategyData, priceData, loading, error 
       emphasis: { disabled: true }, silent: true, z: 2,
     });
 
+    // Purchase markers (scatter on price grid)
+    if (showBuys && purchases.size > 1) {
+      const maxBuy = purchases._maxBuy || 1;
+      const MIN_SIZE = 6;
+      const MAX_SIZE = 22;
+
+      const buyData = [];
+      for (const d of data) {
+        const bought = purchases.get(d.date);
+        if (bought && bought > 0) {
+          const ratio = bought / maxBuy;
+          const size = MIN_SIZE + ratio * (MAX_SIZE - MIN_SIZE);
+          buyData.push({
+            value: [d.date, d.btcPrice],
+            symbolSize: Math.round(size),
+            _btcBought: bought,
+          });
+        }
+      }
+
+      series.push({
+        type: 'scatter', name: 'Compras',
+        xAxisIndex: 0, yAxisIndex: 0,
+        data: buyData,
+        itemStyle: {
+          color: 'rgba(0,196,79,0.7)',
+          borderColor: '#00c44f',
+          borderWidth: 1,
+        },
+        emphasis: { disabled: true },
+        silent: true,
+        z: 10,
+      });
+    }
+
     let nextGrid = 1;
 
     // GRID — MVRV (optional, between price and holdings)
@@ -264,6 +329,11 @@ export default function StrategyChart({ strategyData, priceData, loading, error 
           html += `<div style="color:#7878c0">Custo Médio: <b>${formatPriceFull(point.costBasis)}</b></div>`;
           html += `<div style="color:${plC}">P&L: <b>${plPct}%</b></div>`;
 
+          if (showBuys && purchases.has(date)) {
+            const bought = purchases.get(date);
+            html += `<div style="margin-top:4px;color:#00c44f">🟢 Compra: <b>+${bought.toLocaleString()} BTC</b></div>`;
+          }
+
           html += `<div style="margin-top:6px;padding-top:5px;border-top:1px solid rgba(120,120,192,0.15)">`;
           html += `<div style="color:#e8e8f0;font-weight:600">Holdings: ${point.holdings.toLocaleString()} BTC</div>`;
           const totalValue = point.btcPrice * point.holdings;
@@ -322,7 +392,7 @@ export default function StrategyChart({ strategyData, priceData, loading, error 
       }],
       series,
     };
-  }, [data, isLog, showHoldings, showMvrv]);
+  }, [data, isLog, showHoldings, showMvrv, showBuys, purchases]);
 
   // ─── Init ───
   useEffect(() => {
@@ -358,7 +428,7 @@ export default function StrategyChart({ strategyData, priceData, loading, error 
     chart.resize();
     const option = buildOption(currentZoom);
     if (option) chart.setOption(option, { notMerge: true });
-  }, [isLog, showHoldings, showMvrv, zoomRange, currentZoom, buildOption, chartHeight]);
+  }, [isLog, showHoldings, showMvrv, showBuys, zoomRange, currentZoom, buildOption, chartHeight]);
 
   const latest = data.length ? data[data.length - 1] : null;
   const plPercent = latest ? ((latest.btcPrice - latest.costBasis) / latest.costBasis * 100).toFixed(1) : 0;
@@ -408,6 +478,11 @@ export default function StrategyChart({ strategyData, priceData, loading, error 
             <span className="toggle-label">MVRV</span>
             <button className={`scale-btn ${showMvrv ? 'active' : ''}`}  onClick={() => setShowMvrv(true)}>ON</button>
             <button className={`scale-btn ${!showMvrv ? 'active' : ''}`} onClick={() => setShowMvrv(false)}>OFF</button>
+          </div>
+          <div className="toggle-group" title="Mostrar/ocultar marcadores de compra">
+            <span className="toggle-label">Compras</span>
+            <button className={`scale-btn ${showBuys ? 'active' : ''}`}  onClick={() => setShowBuys(true)}>ON</button>
+            <button className={`scale-btn ${!showBuys ? 'active' : ''}`} onClick={() => setShowBuys(false)}>OFF</button>
           </div>
         </div>
       </div>
