@@ -38,6 +38,9 @@ jobs:
       - name: Update STH MVRV
         run: node scripts/update-sth-mvrv.mjs
 
+      - name: Update Strategy Holdings
+        run: node scripts/update-strategy.mjs
+
       - name: Commit and push if data changed
         working-directory: .
         run: |
