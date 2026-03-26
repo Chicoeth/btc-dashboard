@@ -33,53 +33,40 @@ export default function StrategyChart({ strategyData, priceData, loading, error 
 
   useEffect(() => { import('echarts').then(() => setEchartsReady(true)); }, []);
 
-  // Merge: for each strategy date, find the closest BTC price
+  /* ─── Daily-granularity data ───
+     Strategy snapshots are sparse (only on purchase dates).
+     We interpolate onto every price date using step interpolation:
+     between snapshots, holdings & costBasis stay constant. */
   const data = useMemo(() => {
     if (!Array.isArray(strategyData) || !strategyData.length) return [];
     if (!Array.isArray(priceData) || !priceData.length) return [];
 
-    // Build a map of date string -> BTC close price from priceData
-    const priceMap = new Map();
-    for (const p of priceData) {
-      const dateStr = new Date(p[0]).toISOString().split('T')[0];
-      priceMap.set(dateStr, p[1]); // p[1] = close price
-    }
+    const sorted = [...strategyData].sort((a, b) => a[0] - b[0]);
+    const snapshots = sorted.map(s => ({ ts: s[0], holdings: s[1], costBasis: s[2] }));
+    const firstTs = snapshots[0].ts;
 
-    // For each strategy record, find the BTC price on that date (or closest prior)
     const result = [];
-    const priceDates = priceData.map(p => p[0]).sort((a, b) => a - b);
+    let snapIdx = 0;
 
-    for (const s of strategyData) {
-      const ts = s[0];
-      const holdings = s[1];
-      const costBasis = s[2];
-      const dateStr = new Date(ts).toISOString().split('T')[0];
+    for (const p of priceData) {
+      const priceTs = p[0];
+      if (priceTs < firstTs) continue;
 
-      // Try exact date first
-      let btcPrice = priceMap.get(dateStr);
+      const btcPrice = p[1];
+      const dateStr = new Date(priceTs).toISOString().split('T')[0];
 
-      // If not found, find closest prior date
-      if (!btcPrice) {
-        for (let offset = 1; offset <= 7; offset++) {
-          const d = new Date(ts - offset * 86400000).toISOString().split('T')[0];
-          if (priceMap.has(d)) { btcPrice = priceMap.get(d); break; }
-        }
+      // Advance to latest snapshot <= this price date
+      while (snapIdx < snapshots.length - 1 && snapshots[snapIdx + 1].ts <= priceTs) {
+        snapIdx++;
       }
 
-      if (!btcPrice) continue;
+      const { holdings, costBasis } = snapshots[snapIdx];
+      const mvrv = Math.round((btcPrice / costBasis) * 1000) / 1000;
 
-      const strategyMvrv = btcPrice / costBasis;
-      result.push({
-        date: dateStr,
-        ts,
-        btcPrice,
-        holdings,
-        costBasis,
-        mvrv: Math.round(strategyMvrv * 1000) / 1000,
-      });
+      result.push({ date: dateStr, ts: priceTs, btcPrice, holdings, costBasis, mvrv });
     }
 
-    return result.sort((a, b) => a.ts - b.ts);
+    return result;
   }, [strategyData, priceData]);
 
   const zoomRange = useMemo(() => {
@@ -92,20 +79,12 @@ export default function StrategyChart({ strategyData, priceData, loading, error 
     return { start: Math.max(0, ((fromTs - first) / (last - first)) * 100), end: 100 };
   }, [data, activePeriod]);
 
-  // Determine how many grids we need
-  const gridCount = useMemo(() => {
-    let count = 1; // price grid always
-    if (showHoldings) count++;
-    if (showMvrv) count++;
-    return count;
-  }, [showHoldings, showMvrv]);
-
   const buildOption = useCallback((z) => {
     if (!data.length) return null;
 
     const dates = data.map(d => d.date);
 
-    // Calculate visible range
+    // Visible slice
     const totalLen = data.length;
     const startIdx = Math.max(0, Math.floor(totalLen * (z.start / 100)));
     const endIdx   = Math.min(totalLen - 1, Math.ceil(totalLen * (z.end / 100)));
@@ -115,54 +94,42 @@ export default function StrategyChart({ strategyData, priceData, loading, error 
     const prices = visible.flatMap(d => [d.btcPrice, d.costBasis]);
     let yPriceMin = Math.min(...prices);
     let yPriceMax = Math.max(...prices);
-
     let yPriceBounds;
     if (isLog) {
-      yPriceMin = Math.max(1, yPriceMin * 0.85);
-      yPriceMax = yPriceMax * 1.15;
-      yPriceBounds = { min: yPriceMin, max: yPriceMax };
+      yPriceBounds = { min: Math.max(1, yPriceMin * 0.85), max: yPriceMax * 1.15 };
     } else {
       const pad = (yPriceMax - yPriceMin) * 0.08;
       yPriceBounds = { min: Math.max(0, yPriceMin - pad), max: yPriceMax + pad };
     }
 
     // Holdings bounds
-    const holdingsVals = visible.map(d => d.holdings);
-    const yHoldMax = Math.max(...holdingsVals) * 1.15;
+    const yHoldMax = Math.max(...visible.map(d => d.holdings)) * 1.15;
 
     // MVRV bounds
     const mvrvVals = visible.map(d => d.mvrv);
     const yMvrvMin = Math.min(...mvrvVals);
     const yMvrvMax = Math.max(...mvrvVals);
-    const mvrvPad = (yMvrvMax - yMvrvMin) * 0.1 || 0.1;
+    const mvrvPad  = (yMvrvMax - yMvrvMin) * 0.1 || 0.1;
 
-    // Grid layout calculation
+    // ─── Grid layout ───
+    // Order: Price (top) → MVRV (middle, optional) → Holdings (bottom, optional)
+    // Price height is FIXED at 55%. Sub-grids share the remaining space before dataZoom.
     const grids = [];
     const xAxes = [];
     const yAxes = [];
     const series = [];
     const xAxisIndices = [];
 
-    // --- GRID 0: Price + Cost Basis ---
-    let priceGridHeight;
-    if (showHoldings && showMvrv) priceGridHeight = '38%';
-    else if (showHoldings || showMvrv) priceGridHeight = '50%';
-    else priceGridHeight = '72%';
-
-    grids.push({ left: 72, right: 48, top: 16, height: priceGridHeight });
-
+    // GRID 0 — Price (always)
+    grids.push({ left: 72, right: 48, top: 16, height: '55%' });
     xAxes.push({
       type: 'category', data: dates, gridIndex: 0,
       axisLine: { show: false }, axisTick: { show: false },
-      axisLabel: { show: false },
-      axisPointer: { label: { show: false } },
+      axisLabel: { show: false }, axisPointer: { label: { show: false } },
     });
     xAxisIndices.push(0);
-
     yAxes.push({
-      type: isLog ? 'log' : 'value', logBase: 10,
-      ...yPriceBounds,
-      gridIndex: 0,
+      type: isLog ? 'log' : 'value', logBase: 10, ...yPriceBounds, gridIndex: 0,
       name: 'Preço (USD)', nameLocation: 'middle', nameGap: 56,
       nameTextStyle: { color: '#5a5a80', fontFamily: 'JetBrains Mono, monospace', fontSize: 11 },
       axisLine: { show: false }, axisTick: { show: false },
@@ -170,143 +137,93 @@ export default function StrategyChart({ strategyData, priceData, loading, error 
       splitLine: { lineStyle: { color: '#1e1e35', type: 'dashed' } },
     });
 
-    // BTC Price line (orange)
+    // BTC Price (orange)
     series.push({
-      type: 'line', name: 'Preço BTC',
-      xAxisIndex: 0, yAxisIndex: 0,
+      type: 'line', name: 'Preço BTC', xAxisIndex: 0, yAxisIndex: 0,
       data: data.map(d => [d.date, d.btcPrice]),
       symbol: 'none', smooth: false,
       lineStyle: { color: '#f7931a', width: 1.5 },
-      emphasis: { disabled: true }, silent: true,
-      z: 3,
+      emphasis: { disabled: true }, silent: true, z: 3,
     });
 
-    // Cost Basis line (dashed, like realized price)
+    // Cost Basis (dashed)
     series.push({
-      type: 'line', name: 'Custo Médio Strategy',
-      xAxisIndex: 0, yAxisIndex: 0,
+      type: 'line', name: 'Custo Médio Strategy', xAxisIndex: 0, yAxisIndex: 0,
       data: data.map(d => [d.date, d.costBasis]),
       symbol: 'none', smooth: false,
       lineStyle: { color: '#7878c0', width: 1.5, type: 'dashed' },
-      emphasis: { disabled: true }, silent: true,
-      z: 2,
+      emphasis: { disabled: true }, silent: true, z: 2,
     });
 
-    let nextGridIdx = 1;
+    let nextGrid = 1;
 
-    // --- GRID 1: Holdings (bars) ---
-    if (showHoldings) {
-      const holdingsGridIdx = nextGridIdx;
-      let holdingsTop, holdingsHeight;
-      if (showMvrv) {
-        holdingsTop = '60%';
-        holdingsHeight = '12%';
-      } else {
-        holdingsTop = '72%';
-        holdingsHeight = '15%';
-      }
-
-      grids.push({ left: 72, right: 48, top: holdingsTop, height: holdingsHeight });
-
-      xAxes.push({
-        type: 'category', data: dates, gridIndex: holdingsGridIdx,
-        axisLine: { show: false }, axisTick: { show: false },
-        axisLabel: { show: false },
-        axisPointer: { label: { show: false } },
-      });
-      xAxisIndices.push(holdingsGridIdx);
-
-      yAxes.push({
-        type: 'value', min: 0, max: yHoldMax,
-        gridIndex: holdingsGridIdx,
-        name: 'Holdings', nameLocation: 'middle', nameGap: 56,
-        nameTextStyle: { color: '#5a5a80', fontFamily: 'JetBrains Mono, monospace', fontSize: 11 },
-        axisLine: { show: false }, axisTick: { show: false },
-        axisLabel: {
-          color: '#5a5a80', fontFamily: 'JetBrains Mono, monospace', fontSize: 10,
-          formatter: formatHoldings,
-        },
-        splitLine: { lineStyle: { color: '#1e1e35', type: 'dashed' } },
-      });
-
-      series.push({
-        type: 'bar', name: 'BTC Holdings',
-        xAxisIndex: holdingsGridIdx, yAxisIndex: holdingsGridIdx,
-        data: data.map(d => [d.date, d.holdings]),
-        barMaxWidth: 8,
-        itemStyle: { color: 'rgba(247,147,26,0.35)', borderRadius: [1, 1, 0, 0] },
-        emphasis: { disabled: true }, silent: true,
-        z: 2,
-      });
-
-      nextGridIdx++;
-    }
-
-    // --- GRID 2: Strategy MVRV ---
+    // GRID — MVRV (optional, between price and holdings)
     if (showMvrv) {
-      const mvrvGridIdx = nextGridIdx;
-      let mvrvTop, mvrvHeight;
-      if (showHoldings) {
-        mvrvTop = '78%';
-        mvrvHeight = '10%';
-      } else {
-        mvrvTop = '72%';
-        mvrvHeight = '15%';
-      }
+      const gi = nextGrid++;
+      const top = showHoldings ? '74%' : '74%';
+      const h   = showHoldings ? '12%' : '15%';
 
-      grids.push({ left: 72, right: 48, top: mvrvTop, height: mvrvHeight });
-
+      grids.push({ left: 72, right: 48, top, height: h });
       xAxes.push({
-        type: 'category', data: dates, gridIndex: mvrvGridIdx,
+        type: 'category', data: dates, gridIndex: gi,
         axisLine: { show: false }, axisTick: { show: false },
-        axisLabel: { show: false },
-        axisPointer: { label: { show: false } },
+        axisLabel: { show: false }, axisPointer: { label: { show: false } },
       });
-      xAxisIndices.push(mvrvGridIdx);
-
+      xAxisIndices.push(gi);
       yAxes.push({
-        type: 'value',
-        min: Math.max(0, yMvrvMin - mvrvPad),
-        max: yMvrvMax + mvrvPad,
-        gridIndex: mvrvGridIdx,
+        type: 'value', min: Math.max(0, yMvrvMin - mvrvPad), max: yMvrvMax + mvrvPad,
+        gridIndex: gi,
         name: 'MVRV Strategy', nameLocation: 'middle', nameGap: 56,
         nameTextStyle: { color: '#5a5a80', fontFamily: 'JetBrains Mono, monospace', fontSize: 11 },
         axisLine: { show: false }, axisTick: { show: false },
-        axisLabel: {
-          color: '#5a5a80', fontFamily: 'JetBrains Mono, monospace', fontSize: 10,
-          formatter: v => v.toFixed(1),
-        },
+        axisLabel: { color: '#5a5a80', fontFamily: 'JetBrains Mono, monospace', fontSize: 10, formatter: v => v.toFixed(1) },
         splitLine: { lineStyle: { color: '#1e1e35', type: 'dashed' } },
       });
 
-      // MVRV line (gray)
       series.push({
-        type: 'line', name: 'Strategy MVRV',
-        xAxisIndex: mvrvGridIdx, yAxisIndex: mvrvGridIdx,
+        type: 'line', name: 'Strategy MVRV', xAxisIndex: gi, yAxisIndex: gi,
         data: data.map(d => [d.date, d.mvrv]),
         symbol: 'none', smooth: false,
         lineStyle: { color: '#9090b0', width: 1.5 },
-        emphasis: { disabled: true }, silent: true,
-        z: 3,
+        emphasis: { disabled: true }, silent: true, z: 3,
+        markLine: {
+          silent: true, symbol: 'none',
+          lineStyle: { color: '#5a5a80', type: 'dashed', width: 1 },
+          label: { show: true, position: 'insideEndTop', formatter: '1.0', color: '#5a5a80', fontFamily: 'JetBrains Mono, monospace', fontSize: 9 },
+          data: [{ yAxis: 1.0 }],
+        },
+      });
+    }
+
+    // GRID — Holdings (optional, always last / bottom)
+    if (showHoldings) {
+      const gi = nextGrid++;
+      const top = showMvrv ? '90%' : '74%';
+      const h   = showMvrv ? '6%'  : '15%';
+
+      grids.push({ left: 72, right: 48, top, height: h });
+      xAxes.push({
+        type: 'category', data: dates, gridIndex: gi,
+        axisLine: { show: false }, axisTick: { show: false },
+        axisLabel: { show: false }, axisPointer: { label: { show: false } },
+      });
+      xAxisIndices.push(gi);
+      yAxes.push({
+        type: 'value', min: 0, max: yHoldMax, gridIndex: gi,
+        name: showMvrv ? '' : 'Holdings', nameLocation: 'middle', nameGap: 56,
+        nameTextStyle: { color: '#5a5a80', fontFamily: 'JetBrains Mono, monospace', fontSize: 11 },
+        axisLine: { show: false }, axisTick: { show: false },
+        axisLabel: { color: '#5a5a80', fontFamily: 'JetBrains Mono, monospace', fontSize: 10, formatter: formatHoldings },
+        splitLine: { lineStyle: { color: '#1e1e35', type: 'dashed' } },
       });
 
-      // markLine at 1.0
-      series[series.length - 1].markLine = {
-        silent: true,
-        symbol: 'none',
-        lineStyle: { color: '#5a5a80', type: 'dashed', width: 1 },
-        label: {
-          show: true,
-          position: 'insideEndTop',
-          formatter: '1.0',
-          color: '#5a5a80',
-          fontFamily: 'JetBrains Mono, monospace',
-          fontSize: 9,
-        },
-        data: [{ yAxis: 1.0 }],
-      };
-
-      nextGridIdx++;
+      series.push({
+        type: 'bar', name: 'BTC Holdings', xAxisIndex: gi, yAxisIndex: gi,
+        data: data.map(d => [d.date, d.holdings]),
+        barMaxWidth: 4,
+        itemStyle: { color: 'rgba(247,147,26,0.35)', borderRadius: [1, 1, 0, 0] },
+        emphasis: { disabled: true }, silent: true, z: 2,
+      });
     }
 
     return {
@@ -322,19 +239,22 @@ export default function StrategyChart({ strategyData, priceData, loading, error 
           const point = data.find(d => d.date === date);
           if (!point) return date;
 
+          const plPct = ((point.btcPrice - point.costBasis) / point.costBasis * 100).toFixed(1);
+          const plC = point.btcPrice >= point.costBasis ? '#00c44f' : '#e8000a';
+
           let html = `<div style="margin-bottom:6px;color:#8080a8">${date}</div>`;
           html += `<div style="color:#f7931a">Preço BTC: <b>${formatPriceFull(point.btcPrice)}</b></div>`;
           html += `<div style="color:#7878c0">Custo Médio: <b>${formatPriceFull(point.costBasis)}</b></div>`;
+          html += `<div style="color:${plC}">P&L: <b>${plPct}%</b></div>`;
 
-          const plPercent = ((point.btcPrice - point.costBasis) / point.costBasis * 100).toFixed(1);
-          const plColor = point.btcPrice >= point.costBasis ? '#00c44f' : '#e8000a';
-          html += `<div style="color:${plColor}">P&L: <b>${plPercent}%</b></div>`;
+          html += `<div style="color:#9090b0;margin-top:4px">Holdings: <b>${point.holdings.toLocaleString()} BTC</b></div>`;
+          const totalValue = point.btcPrice * point.holdings;
+          html += `<div style="color:#9090b0">Valor Total: <b>${formatPriceFull(totalValue)}</b></div>`;
 
-          if (showHoldings) {
-            html += `<div style="color:#9090b0;margin-top:4px">Holdings: <b>${point.holdings.toLocaleString()} BTC</b></div>`;
-            const totalValue = point.btcPrice * point.holdings;
-            html += `<div style="color:#9090b0">Valor Total: <b>${formatPriceFull(totalValue)}</b></div>`;
-          }
+          const plUsd = (point.btcPrice - point.costBasis) * point.holdings;
+          const plUsdC = plUsd >= 0 ? '#00c44f' : '#e8000a';
+          const plSign = plUsd >= 0 ? '+' : '';
+          html += `<div style="color:${plUsdC}">Lucro/Prejuízo: <b>${plSign}${formatPriceFull(plUsd)}</b></div>`;
 
           if (showMvrv) {
             html += `<div style="color:#9090b0;margin-top:4px">MVRV Strategy: <b>${point.mvrv.toFixed(3)}</b></div>`;
@@ -374,37 +294,18 @@ export default function StrategyChart({ strategyData, priceData, loading, error 
       ],
       graphic: [{
         type: 'group',
-        left: 80,
-        top: 22,
+        left: 80, top: 22,
         children: [
-          {
-            type: 'rect',
-            shape: { width: 268, height: 20, r: 4 },
-            style: { fill: 'rgba(10,10,20,0.72)', stroke: 'rgba(120,120,192,0.3)', lineWidth: 1 },
-          },
-          {
-            type: 'line',
-            shape: { x1: 10, y1: 10, x2: 30, y2: 10 },
-            style: { stroke: '#7878c0', lineWidth: 1.5, lineDash: [4, 3] },
-          },
-          {
-            type: 'text',
-            left: 36,
-            top: 3,
-            style: {
-              text: 'Linha tracejada = Custo Médio Strategy',
-              fill: '#9090c8',
-              fontSize: 10,
-              fontFamily: 'JetBrains Mono, monospace',
-            },
-          },
+          { type: 'rect', shape: { width: 268, height: 20, r: 4 }, style: { fill: 'rgba(10,10,20,0.72)', stroke: 'rgba(120,120,192,0.3)', lineWidth: 1 } },
+          { type: 'line', shape: { x1: 10, y1: 10, x2: 30, y2: 10 }, style: { stroke: '#7878c0', lineWidth: 1.5, lineDash: [4, 3] } },
+          { type: 'text', left: 36, top: 3, style: { text: 'Linha tracejada = Custo Médio Strategy', fill: '#9090c8', fontSize: 10, fontFamily: 'JetBrains Mono, monospace' } },
         ],
       }],
       series,
     };
-  }, [data, isLog, showHoldings, showMvrv, gridCount]);
+  }, [data, isLog, showHoldings, showMvrv]);
 
-  // Init
+  // ─── Init ───
   useEffect(() => {
     if (!echartsReady || !chartRef.current || !data.length) return;
     const init = async () => {
@@ -431,7 +332,7 @@ export default function StrategyChart({ strategyData, priceData, loading, error 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [echartsReady, data.length]);
 
-  // Update
+  // ─── Update ───
   useEffect(() => {
     const chart = chartInst.current;
     if (!chart || !data.length) return;
@@ -497,9 +398,7 @@ export default function StrategyChart({ strategyData, priceData, loading, error 
             <div className="chart-state">
               {loading && <><div className="spinner" /><span>Carregando...</span></>}
               {error   && <span style={{ color: '#ef4444' }}>⚠ {error}</span>}
-              {!loading && !error && !data.length && (
-                <span>Sem dados disponíveis.</span>
-              )}
+              {!loading && !error && !data.length && <span>Sem dados disponíveis.</span>}
             </div>
           )}
           <div ref={chartRef} className="echarts-canvas"
@@ -510,7 +409,7 @@ export default function StrategyChart({ strategyData, priceData, loading, error 
 
       <div className="chart-footer">
         <span>{data.length} registros · {data.length ? `${data[0].date} → ${data[data.length-1].date}` : ''}</span>
-        <span>Fonte: Strategy (MSTR)</span>
+        <span>Fonte: Strategy (MSTR) · bitcointreasuries.net</span>
       </div>
 
       <style jsx>{`
