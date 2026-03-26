@@ -233,8 +233,13 @@ export default function StrategyChart({ strategyData, priceData, loading, error 
           borderColor: '#00c44f',
           borderWidth: 1,
         },
-        emphasis: { disabled: true },
-        silent: true,
+        emphasis: {
+          itemStyle: {
+            color: 'rgba(0,196,79,0.9)',
+            borderColor: '#00ff5a',
+            borderWidth: 2,
+          },
+        },
         z: 10,
       });
     }
@@ -329,9 +334,11 @@ export default function StrategyChart({ strategyData, priceData, loading, error 
           html += `<div style="color:#7878c0">Custo Médio: <b>${formatPriceFull(point.costBasis)}</b></div>`;
           html += `<div style="color:${plC}">P&L: <b>${plPct}%</b></div>`;
 
-          if (showBuys && purchases.has(date)) {
+          if (showBuys) {
             const bought = purchases.get(date);
-            html += `<div style="margin-top:4px;color:#00c44f">🟢 Compra: <b>+${bought.toLocaleString()} BTC</b></div>`;
+            if (bought) {
+              html += `<div style="margin-top:4px;color:#00c44f">🟢 Compra: <b>+${bought.toLocaleString()} BTC</b></div>`;
+            }
           }
 
           html += `<div style="margin-top:6px;padding-top:5px;border-top:1px solid rgba(120,120,192,0.15)">`;
