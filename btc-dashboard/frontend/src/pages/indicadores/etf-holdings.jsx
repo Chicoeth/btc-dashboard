@@ -1,0 +1,87 @@
+import { useState, useEffect } from 'react';
+import Layout   from '../../components/Layout';
+import ETFChart from '../../components/charts/ETFChart';
+
+export default function ETFPage() {
+  const [etfData, setEtfData]   = useState(null);
+  const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState(null);
+
+  useEffect(() => {
+    setLoading(true);
+    fetch('/api/etf-holdings')
+      .then(r => r.json())
+      .then(data => {
+        setEtfData(Array.isArray(data) ? data : []);
+        setLoading(false);
+      })
+      .catch(e => { setError(e.message); setLoading(false); });
+  }, []);
+
+  return (
+    <Layout title="ETFs de Bitcoin" subtitle="Holdings dos ETFs Spot de Bitcoin dos EUA">
+      <div className="page-card">
+        <ETFChart
+          etfData={etfData}
+          loading={loading}
+          error={error}
+        />
+      </div>
+      <div className="info-panel">
+        <div className="info-section">
+          <h3>O que é este gráfico?</h3>
+          <p>
+            Mostra os holdings combinados dos <strong>11 ETFs Spot de Bitcoin</strong> listados nos EUA,
+            aprovados pela SEC em janeiro de 2024. Juntos, eles detêm mais de 1.3 milhão de BTC (~6% de todo o supply).
+          </p>
+          <p>
+            A <strong>linha laranja</strong> é o preço de mercado do Bitcoin. As <strong>barras</strong> mostram
+            a quantidade total de BTC sob custódia dos ETFs.
+          </p>
+        </div>
+        <div className="info-section">
+          <h3>ETFs incluídos</h3>
+          <div className="zone-rows">
+            <div className="zone-row">
+              <span className="dot" style={{background:'#f7931a'}} />
+              <div>
+                <strong style={{color:'#f7931a'}}>IBIT (BlackRock)</strong>
+                <p>O maior ETF de Bitcoin do mundo, com ~60% de todo o mercado de ETFs spot.</p>
+              </div>
+            </div>
+            <div className="zone-row">
+              <span className="dot" style={{background:'#3b82f6'}} />
+              <div>
+                <strong style={{color:'#3b82f6'}}>FBTC (Fidelity)</strong>
+                <p>Segundo maior, com custódia própria via Fidelity Digital Assets.</p>
+              </div>
+            </div>
+            <div className="zone-row">
+              <span className="dot" style={{background:'#6366f1'}} />
+              <div>
+                <strong style={{color:'#6366f1'}}>GBTC (Grayscale)</strong>
+                <p>Convertido de trust para ETF em jan/2024. Ainda detém holdings significativos.</p>
+              </div>
+            </div>
+          </div>
+          <p style={{marginTop: '8px', color: '#5a5a80', fontSize: '12px'}}>
+            Outros: BITB (Bitwise), ARKB (ARK/21Shares), HODL (VanEck), BTCO (Invesco),
+            EZBC (Franklin), BRRR (CoinShares), BTCW (WisdomTree), BTC (Grayscale Mini).
+          </p>
+        </div>
+        <div className="info-section">
+          <h3>Como interpretar</h3>
+          <p>
+            O crescimento dos holdings dos ETFs indica absorção de BTC do mercado por investidores
+            institucionais e de varejo via veículos regulados. Quando os holdings crescem,
+            mais BTC está sendo retirado de circulação — potencialmente reduzindo o supply disponível.
+          </p>
+          <p>
+            Ative <strong>"Por Ticker"</strong> para ver a distribuição entre os diferentes ETFs e
+            entender a concentração do mercado.
+          </p>
+        </div>
+      </div>
+    </Layout>
+  );
+}
