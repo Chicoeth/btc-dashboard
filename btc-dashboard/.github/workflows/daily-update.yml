@@ -41,6 +41,9 @@ jobs:
       - name: Update Strategy Holdings
         run: node scripts/update-strategy.mjs
 
+      - name: Update ETF Holdings
+        run: node scripts/update-etf-holdings.mjs
+
       - name: Commit and push if data changed
         working-directory: .
         run: |
