@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { Bitcoin, TrendingUp, Activity, BarChart2, Users, Divide, GitCompareArrows, Building2 } from 'lucide-react';
+import { Bitcoin, TrendingUp, Activity, BarChart2, Users, Divide, GitCompareArrows, Building2, Landmark } from 'lucide-react';
 
 const NAV = [
   { label: 'Preço Histórico',        href: '/mercado/preco',                icon: TrendingUp       },
@@ -10,6 +10,7 @@ const NAV = [
   { label: 'Índice Medo & Ganância', href: '/indicadores/medo-ganancia',    icon: Activity          },
   { label: 'Comparador de Ciclos',   href: '/indicadores/comparador-ciclos', icon: GitCompareArrows },
   { label: 'Strategy (MSTR)',        href: '/indicadores/strategy',          icon: Building2        },
+  { label: 'ETFs de Bitcoin',        href: '/indicadores/etf-holdings',      icon: Landmark         },
 ];
 
 export default function Sidebar() {
