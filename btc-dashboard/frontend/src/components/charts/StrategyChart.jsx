@@ -24,7 +24,7 @@ function formatHoldings(v) {
 export default function StrategyChart({ strategyData, priceData, loading, error }) {
   const chartRef  = useRef(null);
   const chartInst = useRef(null);
-  const [isLog, setIsLog]               = useState(false);
+  const [isLog, setIsLog]               = useState(true);
   const [showHoldings, setShowHoldings]  = useState(true);
   const [showMvrv, setShowMvrv]          = useState(false);
   const [activePeriod, setActivePeriod]  = useState('Todo');
@@ -79,6 +79,14 @@ export default function StrategyChart({ strategyData, priceData, loading, error 
     return { start: Math.max(0, ((fromTs - first) / (last - first)) * 100), end: 100 };
   }, [data, activePeriod]);
 
+  // Dynamic canvas height based on active toggles
+  const chartHeight = useMemo(() => {
+    let h = 16 + 360 + 56; // PRICE_TOP + PRICE_H + DZ_AREA
+    if (showMvrv)     h += 20 + 110; // GAP + MVRV_H
+    if (showHoldings) h += 20 + 90;  // GAP + HOLDINGS_H
+    return h;
+  }, [showMvrv, showHoldings]);
+
   const buildOption = useCallback((z) => {
     if (!data.length) return null;
 
@@ -111,17 +119,28 @@ export default function StrategyChart({ strategyData, priceData, loading, error 
     const yMvrvMax = Math.max(...mvrvVals);
     const mvrvPad  = (yMvrvMax - yMvrvMin) * 0.1 || 0.1;
 
-    // ─── Grid layout ───
+    // ─── Grid layout (pixel-based for precise control) ───
     // Order: Price (top) → MVRV (middle, optional) → Holdings (bottom, optional)
-    // Price height is FIXED at 55%. Sub-grids share the remaining space before dataZoom.
+    // Canvas height is dynamic: 520 base + 120 for MVRV + 100 for Holdings
     const grids = [];
     const xAxes = [];
     const yAxes = [];
     const series = [];
     const xAxisIndices = [];
 
+    // Pixel layout: top=16, price=360px fixed, gap=20, sub-grids, dataZoom area=56px
+    const PRICE_TOP = 16;
+    const PRICE_H   = 360;
+    const GAP        = 20;
+    const DZ_AREA    = 56; // dataZoom height + bottom padding
+
+    let cursor = PRICE_TOP + PRICE_H + GAP; // where next grid starts
+
+    const MVRV_H     = 110;
+    const HOLDINGS_H = 90;
+
     // GRID 0 — Price (always)
-    grids.push({ left: 72, right: 48, top: 16, height: '55%' });
+    grids.push({ left: 72, right: 48, top: PRICE_TOP, height: PRICE_H });
     xAxes.push({
       type: 'category', data: dates, gridIndex: 0,
       axisLine: { show: false }, axisTick: { show: false },
@@ -160,10 +179,9 @@ export default function StrategyChart({ strategyData, priceData, loading, error 
     // GRID — MVRV (optional, between price and holdings)
     if (showMvrv) {
       const gi = nextGrid++;
-      const top = showHoldings ? '74%' : '74%';
-      const h   = showHoldings ? '12%' : '15%';
+      grids.push({ left: 72, right: 48, top: cursor, height: MVRV_H });
+      cursor += MVRV_H + GAP;
 
-      grids.push({ left: 72, right: 48, top, height: h });
       xAxes.push({
         type: 'category', data: dates, gridIndex: gi,
         axisLine: { show: false }, axisTick: { show: false },
@@ -198,10 +216,9 @@ export default function StrategyChart({ strategyData, priceData, loading, error 
     // GRID — Holdings (optional, always last / bottom)
     if (showHoldings) {
       const gi = nextGrid++;
-      const top = showMvrv ? '90%' : '74%';
-      const h   = showMvrv ? '6%'  : '15%';
+      grids.push({ left: 72, right: 48, top: cursor, height: HOLDINGS_H });
+      cursor += HOLDINGS_H + GAP;
 
-      grids.push({ left: 72, right: 48, top, height: h });
       xAxes.push({
         type: 'category', data: dates, gridIndex: gi,
         axisLine: { show: false }, axisTick: { show: false },
@@ -210,7 +227,7 @@ export default function StrategyChart({ strategyData, priceData, loading, error 
       xAxisIndices.push(gi);
       yAxes.push({
         type: 'value', min: 0, max: yHoldMax, gridIndex: gi,
-        name: showMvrv ? '' : 'Holdings', nameLocation: 'middle', nameGap: 56,
+        name: 'Holdings (BTC)', nameLocation: 'middle', nameGap: 56,
         nameTextStyle: { color: '#5a5a80', fontFamily: 'JetBrains Mono, monospace', fontSize: 11 },
         axisLine: { show: false }, axisTick: { show: false },
         axisLabel: { color: '#5a5a80', fontFamily: 'JetBrains Mono, monospace', fontSize: 10, formatter: formatHoldings },
@@ -247,7 +264,8 @@ export default function StrategyChart({ strategyData, priceData, loading, error 
           html += `<div style="color:#7878c0">Custo Médio: <b>${formatPriceFull(point.costBasis)}</b></div>`;
           html += `<div style="color:${plC}">P&L: <b>${plPct}%</b></div>`;
 
-          html += `<div style="color:#9090b0;margin-top:4px">Holdings: <b>${point.holdings.toLocaleString()} BTC</b></div>`;
+          html += `<div style="margin-top:6px;padding-top:5px;border-top:1px solid rgba(120,120,192,0.15)">`;
+          html += `<div style="color:#e8e8f0;font-weight:600">Holdings: ${point.holdings.toLocaleString()} BTC</div>`;
           const totalValue = point.btcPrice * point.holdings;
           html += `<div style="color:#9090b0">Valor Total: <b>${formatPriceFull(totalValue)}</b></div>`;
 
@@ -255,6 +273,7 @@ export default function StrategyChart({ strategyData, priceData, loading, error 
           const plUsdC = plUsd >= 0 ? '#00c44f' : '#e8000a';
           const plSign = plUsd >= 0 ? '+' : '';
           html += `<div style="color:${plUsdC}">Lucro/Prejuízo: <b>${plSign}${formatPriceFull(plUsd)}</b></div>`;
+          html += `</div>`;
 
           if (showMvrv) {
             html += `<div style="color:#9090b0;margin-top:4px">MVRV Strategy: <b>${point.mvrv.toFixed(3)}</b></div>`;
@@ -336,9 +355,10 @@ export default function StrategyChart({ strategyData, priceData, loading, error 
   useEffect(() => {
     const chart = chartInst.current;
     if (!chart || !data.length) return;
+    chart.resize();
     const option = buildOption(currentZoom);
     if (option) chart.setOption(option, { notMerge: true });
-  }, [isLog, showHoldings, showMvrv, zoomRange, currentZoom, buildOption]);
+  }, [isLog, showHoldings, showMvrv, zoomRange, currentZoom, buildOption, chartHeight]);
 
   const latest = data.length ? data[data.length - 1] : null;
   const plPercent = latest ? ((latest.btcPrice - latest.costBasis) / latest.costBasis * 100).toFixed(1) : 0;
@@ -402,7 +422,7 @@ export default function StrategyChart({ strategyData, priceData, loading, error 
             </div>
           )}
           <div ref={chartRef} className="echarts-canvas"
-            style={{ opacity: loading || error || !data.length ? 0.15 : 1, height: '520px' }}
+            style={{ opacity: loading || error || !data.length ? 0.15 : 1, height: chartHeight + 'px' }}
           />
         </div>
       </div>
@@ -456,8 +476,8 @@ export default function StrategyChart({ strategyData, priceData, loading, error 
         .period-btn:hover, .scale-btn:hover { color:var(--text-primary); background:rgba(255,255,255,0.04); }
         .period-btn.active, .scale-btn.active { color:var(--brand-orange); background:rgba(247,147,26,0.1); }
         .chart-body { flex:1; display:flex; min-height:0; }
-        .chart-area { flex:1; position:relative; min-height:520px; }
-        .echarts-canvas { width:100%; min-height:520px; transition:opacity 0.3s; }
+        .chart-area { flex:1; position:relative; }
+        .echarts-canvas { width:100%; transition:opacity 0.3s; }
         .chart-state {
           position:absolute; inset:0; display:flex; flex-direction:column;
           align-items:center; justify-content:center; gap:12px;
