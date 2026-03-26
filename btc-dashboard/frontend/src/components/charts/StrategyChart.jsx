@@ -335,9 +335,21 @@ export default function StrategyChart({ strategyData, priceData, loading, error 
           html += `<div style="color:${plC}">P&L: <b>${plPct}%</b></div>`;
 
           if (showBuys) {
-            const bought = purchases.get(date);
+            // Check exact date first, then ±3 days to catch nearby hover
+            let bought = purchases.get(date);
+            let buyDate = date;
+            if (!bought) {
+              const ts = point.ts;
+              for (let offset = 1; offset <= 3; offset++) {
+                const before = new Date(ts - offset * 86400000).toISOString().split('T')[0];
+                const after  = new Date(ts + offset * 86400000).toISOString().split('T')[0];
+                if (purchases.has(before)) { bought = purchases.get(before); buyDate = before; break; }
+                if (purchases.has(after))  { bought = purchases.get(after);  buyDate = after;  break; }
+              }
+            }
             if (bought) {
-              html += `<div style="margin-top:4px;color:#00c44f">🟢 Compra: <b>+${bought.toLocaleString()} BTC</b></div>`;
+              const label = buyDate !== date ? ` (${buyDate})` : '';
+              html += `<div style="margin-top:4px;color:#00c44f">🟢 Compra${label}: <b>+${bought.toLocaleString()} BTC</b></div>`;
             }
           }
 
