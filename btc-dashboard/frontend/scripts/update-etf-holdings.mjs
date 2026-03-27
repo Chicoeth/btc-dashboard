@@ -3,14 +3,8 @@
  *
  * Fonte: bitbo.io/treasuries/us-etfs/ (scraping da tabela HTML)
  *
- * Formato de saída (array de arrays):
- *   [ts_ms, btc_price, total, avg_cost, mvrv, IBIT, FBTC, BITB, ARKB, BTCO, EZBC, BRRR, HODL, BTCW, GBTC, BTC]
- *   Índices: 0      1        2      3        4     5..15
- *
- * Custo médio e MVRV: calculados incrementalmente a partir do último registro existente.
- *   - Compara holdings de hoje vs ontem → delta = flow
- *   - Se flow > 0 (inflow): custo acumulado += flow × preço de hoje
- *   - Se flow < 0 (outflow): posição reduz, avg cost inalterado
+ * Formato de saída:
+ *   [ts_ms, btc_price, total, IBIT, FBTC, BITB, ARKB, BTCO, EZBC, BRRR, HODL, BTCW, GBTC, BTC]
  *
  * Uso: node scripts/update-etf-holdings.mjs
  */
@@ -31,7 +25,6 @@ const TICKER_MAP = {
   'DEFI': null,
 };
 
-/* ── Buscar preço BTC via Yahoo Finance ── */
 async function fetchBtcPrice() {
   const to   = Math.floor(Date.now() / 1000);
   const from = to - 2 * 24 * 60 * 60;
@@ -47,7 +40,6 @@ async function fetchBtcPrice() {
   throw new Error('Nenhum preço válido');
 }
 
-/* ── Scraping do Bitbo ── */
 async function fetchEtfHoldings() {
   console.log('Buscando dados de ETF holdings em bitbo.io...');
   const res = await fetch(SOURCE_URL, {
@@ -100,14 +92,12 @@ async function fetchEtfHoldings() {
 }
 
 async function main() {
-  /* 1. Carregar dados existentes */
   let existing = [];
   if (fs.existsSync(DATA_FILE)) {
     existing = JSON.parse(fs.readFileSync(DATA_FILE, 'utf-8'));
     console.log(`Dados existentes: ${existing.length} registros`);
   }
 
-  /* 2. Buscar holdings atuais */
   let holdingsMap;
   try {
     holdingsMap = await fetchEtfHoldings();
@@ -117,7 +107,6 @@ async function main() {
     process.exit(1);
   }
 
-  /* 3. Buscar preço BTC */
   let btcPrice;
   try {
     btcPrice = await fetchBtcPrice();
@@ -130,55 +119,13 @@ async function main() {
     } else { process.exit(1); }
   }
 
-  /* 4. Calcular custo médio e MVRV incremental */
   const totalToday = ETFS.reduce((s, t) => s + (holdingsMap[t] || 0), 0);
-
-  let avgCost, mvrv;
-
-  if (existing.length) {
-    const prev = existing.at(-1);
-    // prev format: [ts, price, total, avgCost, mvrv, ...etfs]
-    const prevTotal   = prev[2];
-    const prevAvgCost = prev[3];
-    const prevCumCost = prevAvgCost * prevTotal;
-    const prevCumBtc  = prevTotal;
-
-    const flow = totalToday - prevTotal;
-    let cumCost = prevCumCost;
-    let cumBtc  = prevCumBtc;
-
-    if (flow > 0) {
-      // Inflow: BTC comprado ao preço de hoje
-      cumCost += flow * btcPrice;
-      cumBtc  += flow;
-    } else if (flow < 0) {
-      // Outflow: posição reduz, avg cost inalterado
-      cumBtc += flow;
-      cumCost = Math.max(0, cumBtc) * prevAvgCost;
-      if (cumBtc < 0) { cumBtc = 0; cumCost = 0; }
-    }
-
-    avgCost = cumBtc > 0 ? cumCost / cumBtc : btcPrice;
-    mvrv    = avgCost > 0 ? btcPrice / avgCost : 1;
-  } else {
-    avgCost = btcPrice;
-    mvrv    = 1;
-  }
-
-  /* 5. Montar registro */
   const today = new Date();
   const ts    = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
 
-  const row = [
-    ts,
-    btcPrice,
-    parseFloat(totalToday.toFixed(2)),
-    parseFloat(avgCost.toFixed(2)),
-    parseFloat(mvrv.toFixed(4)),
-  ];
+  const row = [ts, btcPrice, parseFloat(totalToday.toFixed(2))];
   for (const etf of ETFS) row.push(holdingsMap[etf] || 0);
 
-  /* 6. Merge */
   const dateKey = (ms) => new Date(ms).toISOString().split('T')[0];
   const byDate  = new Map(existing.map(r => [dateKey(r[0]), r]));
   byDate.set(dateKey(ts), row);
@@ -188,7 +135,7 @@ async function main() {
   fs.writeFileSync(DATA_FILE, JSON.stringify(merged));
 
   console.log(`✓ ETF Holdings: ${added >= 0 ? '+' : ''}${added} registros | total: ${merged.length} | último: ${dateKey(merged.at(-1)[0])}`);
-  console.log(`  Total BTC: ${totalToday.toLocaleString()} | Custo Médio: $${avgCost.toFixed(0)} | MVRV: ${mvrv.toFixed(3)}`);
+  console.log(`  Total BTC: ${totalToday.toLocaleString()}`);
 }
 
 main().catch(err => { console.error('Erro:', err.message); process.exit(1); });
