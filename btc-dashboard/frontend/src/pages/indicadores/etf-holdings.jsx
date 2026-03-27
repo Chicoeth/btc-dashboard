@@ -69,19 +69,50 @@ export default function ETFPage() {
             EZBC (Franklin), BRRR (CoinShares), BTCW (WisdomTree), BTC (Grayscale Mini).
           </p>
         </div>
-        <div className="info-section">
-          <h3>Como interpretar</h3>
-          <p>
-            O crescimento dos holdings dos ETFs indica absorção de BTC do mercado por investidores
-            institucionais e de varejo via veículos regulados. Quando os holdings crescem,
-            mais BTC está sendo retirado de circulação — potencialmente reduzindo o supply disponível.
-          </p>
-          <p>
-            Ative <strong>"Por Ticker"</strong> para ver a distribuição entre os diferentes ETFs e
-            entender a concentração do mercado.
-          </p>
-        </div>
       </div>
+
+      <style jsx>{`
+        .page-card {
+          background: var(--bg-card);
+          border: 1px solid var(--border-subtle);
+          border-radius: 12px;
+          overflow: hidden;
+          margin-bottom: 20px;
+        }
+        .info-panel {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 16px;
+        }
+        @media (max-width: 900px) { .info-panel { grid-template-columns: 1fr; } }
+        .info-section {
+          background: var(--bg-card);
+          border: 1px solid var(--border-subtle);
+          border-radius: 12px;
+          padding: 20px 24px;
+        }
+        .info-section h3 {
+          font-family: var(--font-display);
+          font-size: 13px;
+          font-weight: 600;
+          color: var(--text-secondary);
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+          margin: 0 0 12px;
+        }
+        .info-section p {
+          font-size: 13px;
+          color: var(--text-muted);
+          line-height: 1.7;
+          margin: 0 0 8px;
+        }
+        .info-section strong { color: var(--text-secondary); }
+        .zone-rows { display: flex; flex-direction: column; gap: 14px; }
+        .zone-row { display: flex; gap: 12px; align-items: flex-start; }
+        .zone-row .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; margin-top: 3px; }
+        .zone-row div p { font-size: 12px; color: var(--text-muted); margin: 3px 0 0; line-height: 1.5; }
+        .zone-row strong { font-size: 13px; }
+      `}</style>
     </Layout>
   );
 }
