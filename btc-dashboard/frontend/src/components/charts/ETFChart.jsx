@@ -47,29 +47,20 @@ export default function ETFChart({ etfData, loading, error }) {
   useEffect(() => { import('echarts').then(() => setEchartsReady(true)); }, []);
 
   /* ─── Parse data ───
-     Format: [ts_ms, btc_price, total, IBIT, FBTC, BITB, ARKB, BTCO, EZBC, BRRR, HODL, BTCW, GBTC, BTC]
-     Index:    0       1          2      3     4     5     6     7     8     9    10    11    12    13
+     Format: [ts_ms, btc_price, total, avg_cost, mvrv, IBIT, FBTC, BITB, ARKB, BTCO, EZBC, BRRR, HODL, BTCW, GBTC, BTC]
+     Index:    0       1          2      3         4     5..15
   */
   const data = useMemo(() => {
     if (!Array.isArray(etfData) || !etfData.length) return [];
     return etfData
-      .filter(d => Array.isArray(d) && d.length >= 14 && d[1] > 0)
+      .filter(d => Array.isArray(d) && d.length >= 16 && d[1] > 0)
       .map(d => {
         const date = new Date(d[0]).toISOString().split('T')[0];
-        const totalHoldings = d[2];
-        // "Cost basis" for ETFs = total USD invested ≈ we don't have it, so we skip costBasis
-        // MVRV-like metric: not applicable in the traditional sense
-        // Instead we can show total value / some reference, but let's keep it simple:
-        // We compute an "average entry price" by tracking cumulative flows, but we don't have flow data in JSON.
-        // So MVRV here = btcPrice / (totalValueAtEntry / totalBTC) — we don't have this.
-        // We'll skip MVRV for now but keep the toggle structure for future use.
         const etfHoldings = {};
-        ETFS.forEach((ticker, i) => { etfHoldings[ticker] = d[3 + i]; });
+        ETFS.forEach((ticker, i) => { etfHoldings[ticker] = d[5 + i]; });
         return {
-          date, ts: d[0], btcPrice: d[1], totalHoldings,
-          etfHoldings,
-          // Placeholder MVRV — not meaningful for ETFs but keeps grid structure
-          mvrv: 0,
+          date, ts: d[0], btcPrice: d[1], totalHoldings: d[2],
+          avgCost: d[3], mvrv: d[4], etfHoldings,
         };
       });
   }, [etfData]);
@@ -85,15 +76,16 @@ export default function ETFChart({ etfData, loading, error }) {
   }, [data, activePeriod]);
 
   /* ─── Dynamic canvas height ─── */
-  const PRICE_TOP = 16;
-  const PRICE_H   = 360;
-  const GAP       = 20;
-  const DZ_AREA   = 56;
+  const PRICE_TOP  = 16;
+  const PRICE_H    = 360;
+  const GAP        = 20;
+  const DZ_AREA    = 56;
+  const MVRV_H     = 110;
   const HOLDINGS_H = showByTicker ? 180 : 90;
 
   const chartHeight = useMemo(() => {
     let h = PRICE_TOP + PRICE_H + DZ_AREA;
-    if (showMvrv)     h += GAP + 110;
+    if (showMvrv)     h += GAP + MVRV_H;
     if (showHoldings) h += GAP + HOLDINGS_H;
     return h;
   }, [showMvrv, showHoldings, showByTicker]);
@@ -102,16 +94,16 @@ export default function ETFChart({ etfData, loading, error }) {
   const buildOption = useCallback((z) => {
     if (!data.length) return null;
 
-    const dates = data.map(d => d.date);
+    const dates    = data.map(d => d.date);
     const totalLen = data.length;
     const startIdx = Math.max(0, Math.floor(totalLen * (z.start / 100)));
     const endIdx   = Math.min(totalLen - 1, Math.ceil(totalLen * (z.end / 100)));
     const visible  = data.slice(startIdx, endIdx + 1);
 
-    // Price bounds
-    const prices = visible.map(d => d.btcPrice);
-    let yPriceMin = Math.min(...prices);
-    let yPriceMax = Math.max(...prices);
+    // Price bounds (include avgCost)
+    const priceVals = visible.flatMap(d => [d.btcPrice, d.avgCost]);
+    let yPriceMin = Math.min(...priceVals);
+    let yPriceMax = Math.max(...priceVals);
     let yPriceBounds;
     if (isLog) {
       yPriceBounds = { min: Math.max(1, yPriceMin * 0.85), max: yPriceMax * 1.15 };
@@ -123,13 +115,18 @@ export default function ETFChart({ etfData, loading, error }) {
     // Holdings bounds
     const yHoldMax = Math.max(...visible.map(d => d.totalHoldings)) * 1.15;
 
+    // MVRV bounds
+    const mvrvVals = visible.map(d => d.mvrv).filter(v => v > 0);
+    const yMvrvMin = mvrvVals.length ? Math.min(...mvrvVals) : 0;
+    const yMvrvMax = mvrvVals.length ? Math.max(...mvrvVals) : 2;
+    const mvrvPad  = (yMvrvMax - yMvrvMin) * 0.1 || 0.1;
+
     // ─── Grid layout (pixel-based) ───
     const grids = [];
     const xAxes = [];
     const yAxes = [];
     const series = [];
     const xAxisIndices = [];
-
     let cursor = PRICE_TOP + PRICE_H + GAP;
 
     // GRID 0 — Price (always)
@@ -161,19 +158,22 @@ export default function ETFChart({ etfData, loading, error }) {
       emphasis: { disabled: true }, silent: true, z: 5,
     });
 
+    // Series — Avg Cost (dashed line, same grid as price)
+    series.push({
+      type: 'line', name: 'Custo Médio ETFs', xAxisIndex: 0, yAxisIndex: 0,
+      data: data.map(d => [d.date, d.avgCost]),
+      symbol: 'none', smooth: false,
+      lineStyle: { color: '#7878c0', width: 1.5, type: 'dashed' },
+      emphasis: { disabled: true }, silent: true, z: 4,
+    });
+
     let nextGrid = 1;
 
-    // GRID — MVRV (optional — reserved for future)
+    // GRID — MVRV (optional)
     if (showMvrv) {
-      const MVRV_H = 110;
       const gi = nextGrid++;
       grids.push({ left: 72, right: 48, top: cursor, height: MVRV_H });
       cursor += MVRV_H + GAP;
-
-      // Compute ETF MVRV: btcPrice / avgCostBasis
-      // We don't have cost basis data, so we approximate using cumulative flow/holdings
-      // For now, skip — just show placeholder text
-      // This grid structure is kept for when cost data becomes available
 
       xAxes.push({
         type: 'category', data: dates, gridIndex: gi,
@@ -182,20 +182,29 @@ export default function ETFChart({ etfData, loading, error }) {
       });
       xAxisIndices.push(gi);
       yAxes.push({
-        type: 'value', min: 0, max: 4, gridIndex: gi,
+        type: 'value',
+        min: Math.max(0, yMvrvMin - mvrvPad),
+        max: yMvrvMax + mvrvPad,
+        gridIndex: gi,
+        name: 'MVRV ETFs', nameLocation: 'middle', nameGap: 56,
+        nameTextStyle: { color: '#5a5a80', fontFamily: 'JetBrains Mono, monospace', fontSize: 11 },
         axisLine: { show: false }, axisTick: { show: false },
         axisLabel: { color: '#5a5a80', fontFamily: 'JetBrains Mono, monospace', fontSize: 10, formatter: v => v.toFixed(1) },
         splitLine: { lineStyle: { color: '#1e1e35', type: 'dashed' } },
-        name: 'MVRV ETF', nameLocation: 'middle', nameGap: 56,
-        nameTextStyle: { color: '#5a5a80', fontFamily: 'JetBrains Mono, monospace', fontSize: 11 },
       });
 
       series.push({
         type: 'line', name: 'ETF MVRV', xAxisIndex: gi, yAxisIndex: gi,
-        data: [], // No data yet
+        data: data.map(d => [d.date, d.mvrv]),
         symbol: 'none', smooth: false,
         lineStyle: { color: '#9090b0', width: 1.5 },
         emphasis: { disabled: true }, silent: true, z: 3,
+        markLine: {
+          silent: true, symbol: 'none',
+          lineStyle: { color: '#5a5a80', type: 'dashed', width: 1 },
+          label: { show: true, position: 'insideEndTop', formatter: '1.0', color: '#5a5a80', fontFamily: 'JetBrains Mono, monospace', fontSize: 9 },
+          data: [{ yAxis: 1.0 }],
+        },
       });
     }
 
@@ -211,8 +220,7 @@ export default function ETFChart({ etfData, loading, error }) {
         axisLabel: {
           color: '#5a5a80', fontFamily: 'JetBrains Mono, monospace', fontSize: 10,
           formatter: (val) => {
-            const d = new Date(val);
-            const m = d.getMonth();
+            const d = new Date(val), m = d.getMonth();
             if (m === 0) return String(d.getFullYear());
             return ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][m];
           },
@@ -234,7 +242,6 @@ export default function ETFChart({ etfData, loading, error }) {
       });
 
       if (showByTicker) {
-        // Stacked area chart per ETF ticker
         ETFS.forEach((ticker, i) => {
           series.push({
             type: 'bar', name: ETF_LABELS[ticker] || ticker,
@@ -247,7 +254,6 @@ export default function ETFChart({ etfData, loading, error }) {
           });
         });
       } else {
-        // Single total bar (same as Strategy)
         series.push({
           type: 'bar', name: 'BTC Holdings', xAxisIndex: gi, yAxisIndex: gi,
           data: data.map(d => [d.date, d.totalHoldings]),
@@ -269,11 +275,22 @@ export default function ETFChart({ etfData, loading, error }) {
         formatter: (params) => {
           if (!params?.length) return '';
           const dateStr = params[0].axisValue;
-          const point = data.find(d => d.date === dateStr);
+          const point   = data.find(d => d.date === dateStr);
           if (!point) return '';
 
           let html = `<div style="margin-bottom:4px;font-weight:600;color:#9090b0">${dateStr}</div>`;
           html += `<div style="color:#f7931a">Preço BTC: <b>${formatPriceFull(point.btcPrice)}</b></div>`;
+          html += `<div style="color:#7878c0">Custo Médio: <b>${formatPriceFull(point.avgCost)}</b></div>`;
+
+          // P&L %
+          const plPct   = ((point.btcPrice / point.avgCost) - 1) * 100;
+          const plColor = plPct >= 0 ? '#00c44f' : '#e8000a';
+          const plSign  = plPct >= 0 ? '+' : '';
+          html += `<div style="color:${plColor}">P&L: <b>${plSign}${plPct.toFixed(1)}%</b></div>`;
+
+          if (showMvrv) {
+            html += `<div style="color:#9090b0;margin-top:2px">MVRV ETFs: <b>${point.mvrv.toFixed(3)}</b></div>`;
+          }
 
           if (showHoldings) {
             html += `<div style="border-top:1px solid #2a2a50;margin:4px 0;padding-top:4px">`;
@@ -282,17 +299,23 @@ export default function ETFChart({ etfData, loading, error }) {
             const totalValue = point.totalHoldings * point.btcPrice;
             html += `<div style="color:#9090b0">Valor Total: <b>${formatPriceFull(totalValue)}</b></div>`;
 
+            // P&L absoluto
+            const totalCost = point.totalHoldings * point.avgCost;
+            const plUsd     = totalValue - totalCost;
+            const plUsdC    = plUsd >= 0 ? '#00c44f' : '#e8000a';
+            const plUsdSign = plUsd >= 0 ? '+' : '';
+            html += `<div style="color:${plUsdC}">Lucro/Prejuízo: <b>${plUsdSign}${formatPriceFull(plUsd)}</b></div>`;
+
             if (showByTicker) {
               html += `<div style="border-top:1px solid #1e1e35;margin:3px 0;padding-top:3px">`;
-              // Show top 5 ETFs by holdings
               const sorted = ETFS
                 .map(t => ({ ticker: t, val: point.etfHoldings[t] }))
                 .filter(x => x.val > 0)
                 .sort((a, b) => b.val - a.val)
                 .slice(0, 5);
-              sorted.forEach((x, i) => {
+              sorted.forEach(x => {
                 const color = ETF_COLORS[ETFS.indexOf(x.ticker)];
-                const pct = ((x.val / point.totalHoldings) * 100).toFixed(1);
+                const pct   = ((x.val / point.totalHoldings) * 100).toFixed(1);
                 html += `<div style="color:${color};font-size:10px">${x.ticker}: ${formatHoldings(x.val)} (${pct}%)</div>`;
               });
               if (ETFS.filter(t => point.etfHoldings[t] > 0).length > 5) {
@@ -300,7 +323,6 @@ export default function ETFChart({ etfData, loading, error }) {
               }
               html += `</div>`;
             }
-
             html += `</div>`;
           }
 
@@ -336,6 +358,15 @@ export default function ETFChart({ etfData, loading, error }) {
         },
         { type: 'inside', xAxisIndex: xAxisIndices, start: z.start, end: z.end },
       ],
+      graphic: [{
+        type: 'group',
+        left: 80, top: 22,
+        children: [
+          { type: 'rect', shape: { width: 264, height: 20, r: 4 }, style: { fill: 'rgba(10,10,20,0.72)', stroke: 'rgba(120,120,192,0.3)', lineWidth: 1 } },
+          { type: 'line', shape: { x1: 10, y1: 10, x2: 30, y2: 10 }, style: { stroke: '#7878c0', lineWidth: 1.5, lineDash: [4, 3] } },
+          { type: 'text', left: 36, top: 3, style: { text: 'Linha tracejada = Custo Médio dos ETFs', fill: '#9090c8', fontSize: 10, fontFamily: 'JetBrains Mono, monospace' } },
+        ],
+      }],
       series,
     };
   }, [data, isLog, showHoldings, showMvrv, showByTicker, HOLDINGS_H]);
@@ -376,7 +407,9 @@ export default function ETFChart({ etfData, loading, error }) {
     if (option) chart.setOption(option, { notMerge: false, replaceMerge: ['series'] });
   }, [isLog, showHoldings, showMvrv, showByTicker, zoomRange, currentZoom, chartHeight, buildOption]);
 
-  const latest = data[data.length - 1];
+  const latest  = data[data.length - 1];
+  const plPct   = latest ? ((latest.btcPrice / latest.avgCost) - 1) * 100 : 0;
+  const plColor = plPct >= 0 ? '#00c44f' : '#e8000a';
 
   return (
     <div className="etf-chart-wrapper">
@@ -385,11 +418,18 @@ export default function ETFChart({ etfData, loading, error }) {
           {latest && (
             <>
               <span className="price-display">{formatPriceFull(latest.btcPrice)}</span>
-              <span className="holdings-label">
-                Total ETFs: <strong>{formatHoldings(latest.totalHoldings)} BTC</strong>
+              <span className="strategy-badge" style={{
+                color: plColor,
+                background: plPct >= 0 ? 'rgba(0,196,79,0.1)' : 'rgba(232,0,10,0.1)',
+                borderColor: plPct >= 0 ? 'rgba(0,196,79,0.3)' : 'rgba(232,0,10,0.3)',
+              }}>
+                MVRV {latest.mvrv.toFixed(3)}
+              </span>
+              <span className="cost-label">
+                Custo Médio: <strong>{formatPriceFull(latest.avgCost)}</strong>
               </span>
               <span className="holdings-label">
-                Valor: <strong>{formatPriceFull(latest.totalHoldings * latest.btcPrice)}</strong>
+                Total: <strong>{formatHoldings(latest.totalHoldings)} BTC</strong>
               </span>
             </>
           )}
@@ -410,6 +450,11 @@ export default function ETFChart({ etfData, loading, error }) {
             <span className="toggle-label">Holdings</span>
             <button className={`scale-btn ${showHoldings ? 'active' : ''}`}  onClick={() => setShowHoldings(true)}>ON</button>
             <button className={`scale-btn ${!showHoldings ? 'active' : ''}`} onClick={() => setShowHoldings(false)}>OFF</button>
+          </div>
+          <div className="toggle-group" title="Mostrar/ocultar MVRV">
+            <span className="toggle-label">MVRV</span>
+            <button className={`scale-btn ${showMvrv ? 'active' : ''}`}  onClick={() => setShowMvrv(true)}>ON</button>
+            <button className={`scale-btn ${!showMvrv ? 'active' : ''}`} onClick={() => setShowMvrv(false)}>OFF</button>
           </div>
           {showHoldings && (
             <div className="toggle-group" title="Dividir holdings por ETF">
@@ -456,10 +501,15 @@ export default function ETFChart({ etfData, loading, error }) {
           font-family:var(--font-mono); font-size:18px; font-weight:700;
           color:var(--text-primary); letter-spacing:-0.02em;
         }
-        .holdings-label {
+        .strategy-badge {
+          font-family:var(--font-mono); font-size:11px; font-weight:600;
+          padding:3px 8px; border-radius:20px; border:1px solid;
+          letter-spacing:0.03em;
+        }
+        .cost-label, .holdings-label {
           font-family:var(--font-mono); font-size:11px; color:#7878c0;
         }
-        .holdings-label strong { color:#9090c8; font-weight:600; }
+        .cost-label strong, .holdings-label strong { color:#9090c8; font-weight:600; }
         .chart-controls { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
         .period-selector, .toggle-group {
           display:flex; background:rgba(255,255,255,0.03);
