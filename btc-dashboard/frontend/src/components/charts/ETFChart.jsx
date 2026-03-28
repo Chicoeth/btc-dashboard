@@ -304,7 +304,8 @@ export default function ETFChart({ etfData, loading, error }) {
         type: 'bar', name: 'Fluxo Semanal',
         xAxisIndex: flowsGridIdx, yAxisIndex: flowsGridIdx,
         data: flowBarData,
-        barMaxWidth: 12,
+        barWidth: '500%',
+        barMaxWidth: 80,
         itemStyle: {
           color: (params) => {
             if (params.value == null || params.value[1] == null) return 'transparent';
