@@ -25,13 +25,28 @@ function formatHoldings(v) {
   if (v >= 1000) return (v / 1000).toFixed(0) + 'k';
   return v.toString();
 }
+function formatFlowUsd(v) {
+  const abs = Math.abs(v);
+  const s   = v >= 0 ? '+' : '-';
+  if (abs >= 1e9) return s + '$' + (abs / 1e9).toFixed(1) + 'B';
+  if (abs >= 1e6) return s + '$' + (abs / 1e6).toFixed(0) + 'M';
+  if (abs >= 1e3) return s + '$' + (abs / 1e3).toFixed(0) + 'k';
+  return s + '$' + abs.toFixed(0);
+}
+function formatFlowBtc(v) {
+  const abs = Math.abs(v);
+  const s   = v >= 0 ? '+' : '-';
+  if (abs >= 1000) return s + (abs / 1000).toFixed(1) + 'k';
+  return s + abs.toFixed(0);
+}
 
 export default function ETFChart({ etfData, loading, error }) {
   const chartRef  = useRef(null);
   const chartInst = useRef(null);
   const [isLog, setIsLog]               = useState(true);
-  const [showHoldings, setShowHoldings]  = useState(true);
   const [showByTicker, setShowByTicker]  = useState(false);
+  const [showFlows, setShowFlows]        = useState(false);
+  const [flowUnit, setFlowUnit]          = useState('USD'); // 'USD' or 'BTC'
   const [activePeriod, setActivePeriod]  = useState('Todo');
   const [echartsReady, setEchartsReady]  = useState(false);
   const [currentZoom, setCurrentZoom]    = useState({ start: 0, end: 100 });
@@ -39,8 +54,7 @@ export default function ETFChart({ etfData, loading, error }) {
   useEffect(() => { import('echarts').then(() => setEchartsReady(true)); }, []);
 
   /* ─── Parse data ───
-     Format: [ts_ms, btc_price, total, IBIT, FBTC, BITB, ARKB, BTCO, EZBC, BRRR, HODL, BTCW, GBTC, BTC]
-     Index:    0       1          2      3     4     5     6     7     8     9    10    11    12    13
+     [ts_ms, btc_price, total, IBIT, FBTC, BITB, ARKB, BTCO, EZBC, BRRR, HODL, BTCW, GBTC, BTC]
   */
   const data = useMemo(() => {
     if (!Array.isArray(etfData) || !etfData.length) return [];
@@ -53,6 +67,56 @@ export default function ETFChart({ etfData, loading, error }) {
         return { date, ts: d[0], btcPrice: d[1], totalHoldings: d[2], etfHoldings };
       });
   }, [etfData]);
+
+  /* ─── Weekly flows ───
+     Group daily data by ISO week.
+     Flow BTC = last day holdings - first day holdings of the week.
+     Flow USD = sum of daily (delta_holdings * price) for each day.
+  */
+  const weeklyFlows = useMemo(() => {
+    if (data.length < 2) return [];
+
+    // Group by week (Monday-based)
+    const weeks = [];
+    let currentWeek = null;
+
+    for (let i = 0; i < data.length; i++) {
+      const d   = data[i];
+      const dt  = new Date(d.ts);
+      // Get Monday of this week
+      const day = dt.getUTCDay();
+      const mon = new Date(d.ts - ((day === 0 ? 6 : day - 1)) * 86400000);
+      const weekKey = mon.toISOString().split('T')[0];
+
+      if (!currentWeek || currentWeek.key !== weekKey) {
+        currentWeek = { key: weekKey, days: [] };
+        weeks.push(currentWeek);
+      }
+      currentWeek.days.push({ ...d, idx: i });
+    }
+
+    return weeks.map(w => {
+      const first = w.days[0];
+      const last  = w.days[w.days.length - 1];
+      const flowBtc = last.totalHoldings - first.totalHoldings;
+
+      // Compute USD flow: sum daily deltas × daily price
+      let flowUsd = 0;
+      for (let j = 0; j < w.days.length; j++) {
+        const today = w.days[j];
+        // For first day of dataset, use flow vs 0 (or previous day)
+        const prevHoldings = j === 0 && w.days[0].idx > 0
+          ? data[w.days[0].idx - 1].totalHoldings
+          : j === 0 ? first.totalHoldings : w.days[j - 1].totalHoldings;
+        const delta = today.totalHoldings - prevHoldings;
+        flowUsd += delta * today.btcPrice;
+      }
+
+      // Use the middle date of the week for the x-axis label
+      const midDate = w.days[Math.floor(w.days.length / 2)].date;
+      return { date: midDate, weekKey: w.key, flowBtc, flowUsd, startDate: first.date, endDate: last.date };
+    });
+  }, [data]);
 
   const zoomRange = useMemo(() => {
     if (!data.length) return { start: 0, end: 100 };
@@ -70,12 +134,13 @@ export default function ETFChart({ etfData, loading, error }) {
   const GAP        = 20;
   const DZ_AREA    = 56;
   const HOLDINGS_H = showByTicker ? 180 : 90;
+  const FLOWS_H    = 120;
 
   const chartHeight = useMemo(() => {
-    let h = PRICE_TOP + PRICE_H + DZ_AREA;
-    if (showHoldings) h += GAP + HOLDINGS_H;
+    let h = PRICE_TOP + PRICE_H + GAP + HOLDINGS_H + DZ_AREA;
+    if (showFlows) h += GAP + FLOWS_H;
     return h;
-  }, [showHoldings, showByTicker]);
+  }, [showByTicker, showFlows]);
 
   /* ─── Build ECharts option ─── */
   const buildOption = useCallback((z) => {
@@ -102,7 +167,6 @@ export default function ETFChart({ etfData, loading, error }) {
     // Holdings bounds
     const yHoldMax = Math.max(...visible.map(d => d.totalHoldings)) * 1.15;
 
-    // ─── Grid layout ───
     const grids = [];
     const xAxes = [];
     const yAxes = [];
@@ -110,7 +174,7 @@ export default function ETFChart({ etfData, loading, error }) {
     const xAxisIndices = [];
     let cursor = PRICE_TOP + PRICE_H + GAP;
 
-    // GRID 0 — Price
+    // ── GRID 0 — Price ──
     grids.push({ left: 72, right: 48, top: PRICE_TOP, height: PRICE_H });
     xAxes.push({
       type: 'category', data: dates, gridIndex: 0,
@@ -125,7 +189,6 @@ export default function ETFChart({ etfData, loading, error }) {
       splitLine: { lineStyle: { color: '#1e1e35', type: 'dashed' } },
     });
 
-    // BTC Price line
     series.push({
       type: 'line', name: 'Preço BTC', xAxisIndex: 0, yAxisIndex: 0,
       data: data.map(d => [d.date, d.btcPrice]),
@@ -134,13 +197,83 @@ export default function ETFChart({ etfData, loading, error }) {
       emphasis: { disabled: true }, silent: true, z: 5,
     });
 
-    // GRID 1 — Holdings (optional)
-    if (showHoldings) {
-      grids.push({ left: 72, right: 48, top: cursor, height: HOLDINGS_H });
-      cursor += HOLDINGS_H + GAP;
+    // ── GRID 1 — Holdings (always visible) ──
+    let holdingsGridIdx = 1;
+    grids.push({ left: 72, right: 48, top: cursor, height: HOLDINGS_H });
+    cursor += HOLDINGS_H + GAP;
+
+    xAxes.push({
+      type: 'category', data: dates, gridIndex: holdingsGridIdx,
+      axisLine: { show: false }, axisTick: { show: false },
+      axisLabel: showFlows ? { show: false } : {
+        color: '#5a5a80', fontFamily: 'JetBrains Mono, monospace', fontSize: 10,
+        formatter: (val) => {
+          const d = new Date(val), m = d.getMonth();
+          if (m === 0) return String(d.getFullYear());
+          return ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][m];
+        },
+        interval: Math.max(1, Math.floor(dates.length / 12)),
+      },
+      axisPointer: { label: { show: false } },
+    });
+    xAxisIndices.push(holdingsGridIdx);
+    yAxes.push({
+      type: 'value', min: 0, max: yHoldMax, gridIndex: holdingsGridIdx,
+      axisLine: { show: false }, axisTick: { show: false },
+      axisLabel: { color: '#5a5a80', fontFamily: 'JetBrains Mono, monospace', fontSize: 10, formatter: v => formatHoldings(v) },
+      splitLine: { lineStyle: { color: '#1e1e35', type: 'dashed' } },
+      name: 'BTC nos ETFs', nameLocation: 'middle', nameGap: 56,
+      nameTextStyle: { color: '#5a5a80', fontFamily: 'JetBrains Mono, monospace', fontSize: 11 },
+    });
+
+    if (showByTicker) {
+      ETFS.forEach((ticker, i) => {
+        series.push({
+          type: 'bar', name: ticker,
+          xAxisIndex: holdingsGridIdx, yAxisIndex: holdingsGridIdx,
+          stack: 'etf-holdings',
+          data: data.map(d => [d.date, d.etfHoldings[ticker]]),
+          itemStyle: { color: ETF_COLORS[i] },
+          barMaxWidth: 6,
+          emphasis: { disabled: true }, silent: true, z: 2,
+        });
+      });
+    } else {
+      series.push({
+        type: 'bar', name: 'BTC Holdings',
+        xAxisIndex: holdingsGridIdx, yAxisIndex: holdingsGridIdx,
+        data: data.map(d => [d.date, d.totalHoldings]),
+        itemStyle: { color: 'rgba(247,147,26,0.35)' },
+        barMaxWidth: 6,
+        emphasis: { disabled: true }, silent: true, z: 2,
+      });
+    }
+
+    // ── GRID 2 — Weekly flows (optional) ──
+    if (showFlows && weeklyFlows.length) {
+      const flowsGridIdx = grids.length;
+      grids.push({ left: 72, right: 48, top: cursor, height: FLOWS_H });
+      cursor += FLOWS_H + GAP;
+
+      // Map weekly flows onto daily dates (each week's bar spans its days)
+      // We place each weekly bar at the middle date of that week
+      const flowBarData = dates.map(date => {
+        const wf = weeklyFlows.find(w => w.date === date);
+        if (!wf) return [date, null];
+        const val = flowUnit === 'USD' ? wf.flowUsd : wf.flowBtc;
+        return [date, val];
+      });
+
+      // Compute flow bounds from visible range
+      const visibleFlows = weeklyFlows.filter(wf => {
+        const wfTs = new Date(wf.date).getTime();
+        return visible.length && wfTs >= visible[0].ts && wfTs <= visible[visible.length - 1].ts;
+      });
+      const flowVals = visibleFlows.map(wf => flowUnit === 'USD' ? wf.flowUsd : wf.flowBtc);
+      const flowMax  = flowVals.length ? Math.max(Math.abs(Math.min(...flowVals)), Math.abs(Math.max(...flowVals))) * 1.15 : 1000;
 
       xAxes.push({
-        type: 'category', data: dates, gridIndex: 1,
+        type: 'category', data: dates, gridIndex: flowsGridIdx,
         axisLine: { show: false }, axisTick: { show: false },
         axisLabel: {
           color: '#5a5a80', fontFamily: 'JetBrains Mono, monospace', fontSize: 10,
@@ -153,37 +286,33 @@ export default function ETFChart({ etfData, loading, error }) {
         },
         axisPointer: { label: { show: false } },
       });
-      xAxisIndices.push(1);
+      xAxisIndices.push(flowsGridIdx);
       yAxes.push({
-        type: 'value', min: 0, max: yHoldMax, gridIndex: 1,
+        type: 'value', min: -flowMax, max: flowMax, gridIndex: flowsGridIdx,
         axisLine: { show: false }, axisTick: { show: false },
-        axisLabel: { color: '#5a5a80', fontFamily: 'JetBrains Mono, monospace', fontSize: 10, formatter: v => formatHoldings(v) },
+        axisLabel: {
+          color: '#5a5a80', fontFamily: 'JetBrains Mono, monospace', fontSize: 10,
+          formatter: v => flowUnit === 'USD' ? formatFlowUsd(v) : formatFlowBtc(v),
+        },
         splitLine: { lineStyle: { color: '#1e1e35', type: 'dashed' } },
-        name: 'BTC nos ETFs', nameLocation: 'middle', nameGap: 56,
+        name: flowUnit === 'USD' ? 'Fluxo Semanal (USD)' : 'Fluxo Semanal (BTC)',
+        nameLocation: 'middle', nameGap: 56,
         nameTextStyle: { color: '#5a5a80', fontFamily: 'JetBrains Mono, monospace', fontSize: 11 },
       });
 
-      if (showByTicker) {
-        ETFS.forEach((ticker, i) => {
-          series.push({
-            type: 'bar', name: ticker,
-            xAxisIndex: 1, yAxisIndex: 1,
-            stack: 'etf-holdings',
-            data: data.map(d => [d.date, d.etfHoldings[ticker]]),
-            itemStyle: { color: ETF_COLORS[i] },
-            barMaxWidth: 6,
-            emphasis: { disabled: true }, silent: true, z: 2,
-          });
-        });
-      } else {
-        series.push({
-          type: 'bar', name: 'BTC Holdings', xAxisIndex: 1, yAxisIndex: 1,
-          data: data.map(d => [d.date, d.totalHoldings]),
-          itemStyle: { color: 'rgba(247,147,26,0.35)' },
-          barMaxWidth: 6,
-          emphasis: { disabled: true }, silent: true, z: 2,
-        });
-      }
+      series.push({
+        type: 'bar', name: 'Fluxo Semanal',
+        xAxisIndex: flowsGridIdx, yAxisIndex: flowsGridIdx,
+        data: flowBarData,
+        barMaxWidth: 12,
+        itemStyle: {
+          color: (params) => {
+            if (params.value == null || params.value[1] == null) return 'transparent';
+            return params.value[1] >= 0 ? 'rgba(0,196,79,0.7)' : 'rgba(232,0,10,0.7)';
+          },
+        },
+        emphasis: { disabled: true }, silent: true, z: 2,
+      });
     }
 
     return {
@@ -202,30 +331,41 @@ export default function ETFChart({ etfData, loading, error }) {
           let html = `<div style="margin-bottom:4px;font-weight:600;color:#9090b0">${dateStr}</div>`;
           html += `<div style="color:#f7931a">Preço BTC: <b>${formatPriceFull(point.btcPrice)}</b></div>`;
 
-          if (showHoldings) {
-            html += `<div style="border-top:1px solid #2a2a50;margin:4px 0;padding-top:4px">`;
-            html += `<div style="color:#e8e8f0;font-weight:600">Total em ETFs: <b>${formatHoldings(point.totalHoldings)} BTC</b></div>`;
-            html += `<div style="color:#9090b0">Valor Total: <b>${formatPriceFull(point.totalHoldings * point.btcPrice)}</b></div>`;
+          html += `<div style="border-top:1px solid #2a2a50;margin:4px 0;padding-top:4px">`;
+          html += `<div style="color:#e8e8f0;font-weight:600">Total em ETFs: <b>${formatHoldings(point.totalHoldings)} BTC</b></div>`;
+          html += `<div style="color:#9090b0">Valor Total: <b>${formatPriceFull(point.totalHoldings * point.btcPrice)}</b></div>`;
 
-            if (showByTicker) {
-              html += `<div style="border-top:1px solid #1e1e35;margin:3px 0;padding-top:3px">`;
-              const sorted = ETFS
-                .map(t => ({ ticker: t, val: point.etfHoldings[t] }))
-                .filter(x => x.val > 0)
-                .sort((a, b) => b.val - a.val)
-                .slice(0, 6);
-              sorted.forEach(x => {
-                const color = ETF_COLORS[ETFS.indexOf(x.ticker)];
-                const pct   = ((x.val / point.totalHoldings) * 100).toFixed(1);
-                html += `<div style="color:${color};font-size:10px">${x.ticker}: ${formatHoldings(x.val)} (${pct}%)</div>`;
-              });
-              if (ETFS.filter(t => point.etfHoldings[t] > 0).length > 6) {
-                html += `<div style="color:#5a5a80;font-size:9px">+ outros</div>`;
-              }
-              html += `</div>`;
+          if (showByTicker) {
+            html += `<div style="border-top:1px solid #1e1e35;margin:3px 0;padding-top:3px">`;
+            const sorted = ETFS
+              .map(t => ({ ticker: t, val: point.etfHoldings[t] }))
+              .filter(x => x.val > 0)
+              .sort((a, b) => b.val - a.val)
+              .slice(0, 6);
+            sorted.forEach(x => {
+              const color = ETF_COLORS[ETFS.indexOf(x.ticker)];
+              const pct   = ((x.val / point.totalHoldings) * 100).toFixed(1);
+              html += `<div style="color:${color};font-size:10px">${x.ticker}: ${formatHoldings(x.val)} (${pct}%)</div>`;
+            });
+            if (ETFS.filter(t => point.etfHoldings[t] > 0).length > 6) {
+              html += `<div style="color:#5a5a80;font-size:9px">+ outros</div>`;
             }
             html += `</div>`;
           }
+          html += `</div>`;
+
+          if (showFlows) {
+            const wf = weeklyFlows.find(w => w.date === dateStr);
+            if (wf) {
+              const flowColor = wf.flowBtc >= 0 ? '#00c44f' : '#e8000a';
+              html += `<div style="border-top:1px solid #2a2a50;margin:4px 0;padding-top:4px">`;
+              html += `<div style="color:${flowColor};font-size:10px">Fluxo semanal: <b>${formatFlowBtc(wf.flowBtc)} BTC</b></div>`;
+              html += `<div style="color:${flowColor};font-size:10px">≈ <b>${formatFlowUsd(wf.flowUsd)}</b></div>`;
+              html += `<div style="color:#5a5a80;font-size:9px">${wf.startDate} → ${wf.endDate}</div>`;
+              html += `</div>`;
+            }
+          }
+
           return html;
         },
       },
@@ -248,7 +388,7 @@ export default function ETFChart({ etfData, loading, error }) {
       ],
       series,
     };
-  }, [data, isLog, showHoldings, showByTicker, HOLDINGS_H]);
+  }, [data, isLog, showByTicker, showFlows, flowUnit, weeklyFlows, HOLDINGS_H]);
 
   // ─── Init ───
   useEffect(() => {
@@ -284,7 +424,7 @@ export default function ETFChart({ etfData, loading, error }) {
     chart.resize();
     const option = buildOption(currentZoom);
     if (option) chart.setOption(option, { notMerge: false, replaceMerge: ['series'] });
-  }, [isLog, showHoldings, showByTicker, zoomRange, currentZoom, chartHeight, buildOption]);
+  }, [isLog, showByTicker, showFlows, flowUnit, zoomRange, currentZoom, chartHeight, buildOption]);
 
   const latest = data[data.length - 1];
 
@@ -316,18 +456,16 @@ export default function ETFChart({ etfData, loading, error }) {
             <button className={`scale-btn ${isLog ? 'active' : ''}`}   onClick={() => setIsLog(true)}>LOG</button>
             <button className={`scale-btn ${!isLog ? 'active' : ''}`}  onClick={() => setIsLog(false)}>LINEAR</button>
           </div>
-          <div className="toggle-group" title="Mostrar/ocultar holdings">
-            <span className="toggle-label">Holdings</span>
-            <button className={`scale-btn ${showHoldings ? 'active' : ''}`}  onClick={() => setShowHoldings(true)}>ON</button>
-            <button className={`scale-btn ${!showHoldings ? 'active' : ''}`} onClick={() => setShowHoldings(false)}>OFF</button>
+          <div className="toggle-group" title="Dividir holdings por ETF">
+            <span className="toggle-label">Por Ticker</span>
+            <button className={`scale-btn ${showByTicker ? 'active' : ''}`}  onClick={() => setShowByTicker(true)}>ON</button>
+            <button className={`scale-btn ${!showByTicker ? 'active' : ''}`} onClick={() => setShowByTicker(false)}>OFF</button>
           </div>
-          {showHoldings && (
-            <div className="toggle-group" title="Dividir holdings por ETF">
-              <span className="toggle-label">Por Ticker</span>
-              <button className={`scale-btn ${showByTicker ? 'active' : ''}`}  onClick={() => setShowByTicker(true)}>ON</button>
-              <button className={`scale-btn ${!showByTicker ? 'active' : ''}`} onClick={() => setShowByTicker(false)}>OFF</button>
-            </div>
-          )}
+          <div className="toggle-group" title="Mostrar fluxo semanal de entrada/saída">
+            <span className="toggle-label">Fluxos</span>
+            <button className={`scale-btn ${showFlows ? 'active' : ''}`}  onClick={() => setShowFlows(true)}>ON</button>
+            <button className={`scale-btn ${!showFlows ? 'active' : ''}`} onClick={() => setShowFlows(false)}>OFF</button>
+          </div>
         </div>
       </div>
 
@@ -343,6 +481,16 @@ export default function ETFChart({ etfData, loading, error }) {
           <div ref={chartRef} className="echarts-canvas"
             style={{ opacity: loading || error || !data.length ? 0.15 : 1, height: chartHeight + 'px' }}
           />
+
+          {/* Toggle BTC/USD inside the flows area */}
+          {showFlows && (
+            <div className="flow-unit-toggle">
+              <button className={`flow-unit-btn ${flowUnit === 'USD' ? 'active' : ''}`}
+                onClick={() => setFlowUnit('USD')}>USD</button>
+              <button className={`flow-unit-btn ${flowUnit === 'BTC' ? 'active' : ''}`}
+                onClick={() => setFlowUnit('BTC')}>BTC</button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -403,6 +551,26 @@ export default function ETFChart({ etfData, loading, error }) {
         }
         @keyframes spin { to { transform: rotate(360deg); } }
         .echarts-canvas { width:100%; }
+
+        .flow-unit-toggle {
+          position:absolute;
+          bottom: 62px; right: 56px;
+          display:flex;
+          background:rgba(10,10,20,0.85);
+          border:1px solid var(--border-subtle);
+          border-radius:5px; overflow:hidden;
+          z-index:3;
+        }
+        .flow-unit-btn {
+          padding:3px 10px; font-family:var(--font-mono); font-size:9px; font-weight:500;
+          letter-spacing:0.05em; color:var(--text-muted); background:none; border:none;
+          border-right:1px solid var(--border-subtle); cursor:pointer;
+          transition:color 0.15s, background 0.15s;
+        }
+        .flow-unit-btn:last-child { border-right:none; }
+        .flow-unit-btn:hover { color:var(--text-primary); }
+        .flow-unit-btn.active { color:#f7931a; background:rgba(247,147,26,0.1); font-weight:600; }
+
         .chart-footer {
           display:flex; justify-content:space-between; align-items:center;
           padding:6px 16px 10px; font-family:var(--font-mono);
