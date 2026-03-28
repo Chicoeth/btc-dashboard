@@ -114,9 +114,19 @@ export default function ETFChart({ etfData, loading, error }) {
 
       // Use the middle date of the week for the x-axis label
       const midDate = w.days[Math.floor(w.days.length / 2)].date;
-      return { date: midDate, weekKey: w.key, flowBtc, flowUsd, startDate: first.date, endDate: last.date };
+      const allDates = w.days.map(d => d.date);
+      return { date: midDate, weekKey: w.key, flowBtc, flowUsd, startDate: first.date, endDate: last.date, allDates };
     });
   }, [data]);
+
+  // Map every date to its weekly flow (for tooltip lookup on any day)
+  const weekFlowByDate = useMemo(() => {
+    const map = new Map();
+    for (const wf of weeklyFlows) {
+      for (const d of wf.allDates) map.set(d, wf);
+    }
+    return map;
+  }, [weeklyFlows]);
 
   const zoomRange = useMemo(() => {
     if (!data.length) return { start: 0, end: 100 };
@@ -311,6 +321,8 @@ export default function ETFChart({ etfData, loading, error }) {
             if (params.value == null || params.value[1] == null) return 'transparent';
             return params.value[1] >= 0 ? 'rgba(0,196,79,0.7)' : 'rgba(232,0,10,0.7)';
           },
+          borderColor: '#0a0a0f',
+          borderWidth: 1,
         },
         emphasis: { disabled: true }, silent: true, z: 2,
       });
@@ -356,7 +368,7 @@ export default function ETFChart({ etfData, loading, error }) {
           html += `</div>`;
 
           if (showFlows) {
-            const wf = weeklyFlows.find(w => w.date === dateStr);
+            const wf = weekFlowByDate.get(dateStr);
             if (wf) {
               const flowColor = wf.flowBtc >= 0 ? '#00c44f' : '#e8000a';
               html += `<div style="border-top:1px solid #2a2a50;margin:4px 0;padding-top:4px">`;
@@ -389,7 +401,7 @@ export default function ETFChart({ etfData, loading, error }) {
       ],
       series,
     };
-  }, [data, isLog, showByTicker, showFlows, flowUnit, weeklyFlows, HOLDINGS_H]);
+  }, [data, isLog, showByTicker, showFlows, flowUnit, weeklyFlows, weekFlowByDate, HOLDINGS_H]);
 
   // ─── Init ───
   useEffect(() => {
