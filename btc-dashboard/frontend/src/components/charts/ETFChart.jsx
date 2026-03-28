@@ -144,13 +144,11 @@ export default function ETFChart({ etfData, loading, error }) {
   const GAP        = 20;
   const DZ_AREA    = 56;
   const HOLDINGS_H = showByTicker ? 180 : 90;
-  const FLOWS_H    = 120;
 
   const chartHeight = useMemo(() => {
     let h = PRICE_TOP + PRICE_H + GAP + HOLDINGS_H + DZ_AREA;
-    if (showFlows) h += GAP + FLOWS_H;
     return h;
-  }, [showByTicker, showFlows]);
+  }, [showByTicker]);
 
   /* ─── Build ECharts option ─── */
   const buildOption = useCallback((z) => {
@@ -259,14 +257,9 @@ export default function ETFChart({ etfData, loading, error }) {
       });
     }
 
-    // ── GRID 2 — Weekly flows (optional) ──
+    // ── Flows overlay on price grid (optional) ──
+    // Uses a second yAxis on grid 0, scaled so bars occupy ~25% of the bottom
     if (showFlows && weeklyFlows.length) {
-      const flowsGridIdx = grids.length;
-      grids.push({ left: 72, right: 48, top: cursor, height: FLOWS_H });
-      cursor += FLOWS_H + GAP;
-
-      // Map weekly flows onto daily dates (each week's bar spans its days)
-      // We place each weekly bar at the middle date of that week
       const flowBarData = dates.map(date => {
         const wf = weeklyFlows.find(w => w.date === date);
         if (!wf) return [date, null];
@@ -274,57 +267,45 @@ export default function ETFChart({ etfData, loading, error }) {
         return [date, val];
       });
 
-      // Compute flow bounds from visible range
       const visibleFlows = weeklyFlows.filter(wf => {
         const wfTs = new Date(wf.date).getTime();
         return visible.length && wfTs >= visible[0].ts && wfTs <= visible[visible.length - 1].ts;
       });
       const flowVals = visibleFlows.map(wf => flowUnit === 'USD' ? wf.flowUsd : wf.flowBtc);
-      const flowMax  = flowVals.length ? Math.max(Math.abs(Math.min(...flowVals)), Math.abs(Math.max(...flowVals))) * 1.15 : 1000;
+      const flowAbsMax = flowVals.length ? Math.max(Math.abs(Math.min(...flowVals)), Math.abs(Math.max(...flowVals))) * 1.15 : 1000;
 
-      xAxes.push({
-        type: 'category', data: dates, gridIndex: flowsGridIdx,
-        axisLine: { show: false }, axisTick: { show: false },
-        axisLabel: {
-          color: '#5a5a80', fontFamily: 'JetBrains Mono, monospace', fontSize: 10,
-          formatter: (val) => {
-            const d = new Date(val), m = d.getMonth();
-            if (m === 0) return String(d.getFullYear());
-            return ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][m];
-          },
-          interval: Math.max(1, Math.floor(dates.length / 12)),
-        },
-        axisPointer: { label: { show: false } },
-      });
-      xAxisIndices.push(flowsGridIdx);
+      // Scale so that the max bar height = 25% of the price grid
+      // We set yAxis range to [-flowAbsMax, flowAbsMax * 7] so the positive peak is at ~25% from bottom
+      // and negative bars extend slightly below center of the flow area
+      const flowYMax = flowAbsMax * 7;
+      const flowYMin = -flowAbsMax * 1.5;
+
+      const flowYAxisIdx = yAxes.length;
       yAxes.push({
-        type: 'value', min: -flowMax, max: flowMax, gridIndex: flowsGridIdx,
+        type: 'value', min: flowYMin, max: flowYMax, gridIndex: 0,
         axisLine: { show: false }, axisTick: { show: false },
-        axisLabel: {
-          color: '#5a5a80', fontFamily: 'JetBrains Mono, monospace', fontSize: 10,
-          formatter: v => flowUnit === 'USD' ? formatFlowUsd(v) : formatFlowBtc(v),
-        },
-        splitLine: { lineStyle: { color: '#1e1e35', type: 'dashed' } },
-        name: flowUnit === 'USD' ? 'Fluxo Semanal (USD)' : 'Fluxo Semanal (BTC)',
-        nameLocation: 'middle', nameGap: 56,
-        nameTextStyle: { color: '#5a5a80', fontFamily: 'JetBrains Mono, monospace', fontSize: 11 },
+        axisLabel: { show: false },
+        splitLine: { show: false },
       });
 
       series.push({
         type: 'bar', name: 'Fluxo Semanal',
-        xAxisIndex: flowsGridIdx, yAxisIndex: flowsGridIdx,
+        xAxisIndex: 0, yAxisIndex: flowYAxisIdx,
         data: flowBarData,
         barWidth: '500%',
         barMaxWidth: 80,
         itemStyle: {
           color: (params) => {
             if (params.value == null || params.value[1] == null) return 'transparent';
-            return params.value[1] >= 0 ? 'rgba(0,196,79,0.7)' : 'rgba(232,0,10,0.7)';
+            return params.value[1] >= 0 ? 'rgba(0,196,79,0.35)' : 'rgba(232,0,10,0.35)';
           },
-          borderColor: '#0a0a0f',
+          borderColor: (params) => {
+            if (params.value == null || params.value[1] == null) return 'transparent';
+            return params.value[1] >= 0 ? 'rgba(0,196,79,0.6)' : 'rgba(232,0,10,0.6)';
+          },
           borderWidth: 1,
         },
-        emphasis: { disabled: true }, silent: true, z: 2,
+        emphasis: { disabled: true }, silent: true, z: 1,
       });
     }
 
@@ -495,9 +476,10 @@ export default function ETFChart({ etfData, loading, error }) {
             style={{ opacity: loading || error || !data.length ? 0.15 : 1, height: chartHeight + 'px' }}
           />
 
-          {/* Toggle BTC/USD inside the flows area */}
+          {/* Toggle BTC/USD inside the price grid area */}
           {showFlows && (
-            <div className="flow-unit-toggle">
+            <div className="flow-unit-toggle"
+              style={{ top: (PRICE_TOP + PRICE_H - 30) + 'px' }}>
               <button className={`flow-unit-btn ${flowUnit === 'USD' ? 'active' : ''}`}
                 onClick={() => setFlowUnit('USD')}>USD</button>
               <button className={`flow-unit-btn ${flowUnit === 'BTC' ? 'active' : ''}`}
@@ -567,7 +549,7 @@ export default function ETFChart({ etfData, loading, error }) {
 
         .flow-unit-toggle {
           position:absolute;
-          bottom: 62px; right: 56px;
+          right: 56px;
           display:flex;
           background:rgba(10,10,20,0.85);
           border:1px solid var(--border-subtle);
