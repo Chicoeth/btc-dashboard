@@ -297,10 +297,7 @@ export default function ETFChart({ etfData, loading, error }) {
             if (params.value == null || params.value[1] == null) return 'transparent';
             return params.value[1] >= 0 ? 'rgba(0,196,79,0.35)' : 'rgba(232,0,10,0.35)';
           },
-          borderColor: (params) => {
-            if (params.value == null || params.value[1] == null) return 'transparent';
-            return params.value[1] >= 0 ? 'rgba(0,196,79,0.6)' : 'rgba(232,0,10,0.6)';
-          },
+          borderColor: 'rgba(30,30,53,0.8)',
           borderWidth: 1,
         },
         emphasis: { disabled: true }, silent: true, z: 1,
