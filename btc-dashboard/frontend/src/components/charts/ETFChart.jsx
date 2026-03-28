@@ -274,11 +274,9 @@ export default function ETFChart({ etfData, loading, error }) {
       const flowVals = visibleFlows.map(wf => flowUnit === 'USD' ? wf.flowUsd : wf.flowBtc);
       const flowAbsMax = flowVals.length ? Math.max(Math.abs(Math.min(...flowVals)), Math.abs(Math.max(...flowVals))) * 1.15 : 1000;
 
-      // Scale so that the max bar height = 25% of the price grid
-      // We set yAxis range to [-flowAbsMax, flowAbsMax * 7] so the positive peak is at ~25% from bottom
-      // and negative bars extend slightly below center of the flow area
-      const flowYMax = flowAbsMax * 7;
-      const flowYMin = -flowAbsMax * 1.5;
+      // Scale so bars occupy ~37% of the price grid height
+      const flowYMax = flowAbsMax * 4.7;
+      const flowYMin = -flowAbsMax * 1.0;
 
       const flowYAxisIdx = yAxes.length;
       yAxes.push({
