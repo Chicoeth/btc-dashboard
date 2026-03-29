@@ -35,6 +35,15 @@ jobs:
       - name: Update MVRV
         run: node scripts/update-mvrv.mjs
 
+      - name: Update STH MVRV
+        run: node scripts/update-sth-mvrv.mjs
+
+      - name: Update Strategy Holdings
+        run: node scripts/update-strategy.mjs
+
+      - name: Update ETF Holdings
+        run: node scripts/update-etf-holdings.mjs
+
       - name: Commit and push if data changed
         working-directory: .
         run: |
