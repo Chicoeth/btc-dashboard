@@ -166,7 +166,7 @@ export default function STHMVRVChart({ sthMvrvData, loading, error }) {
   // O preço realizado pode cruzar as bandas em períodos extremos — isso é esperado.
   const bandData = useMemo(() => {
     if (!data.length) return { upper: [], lower: [] };
-    const WINDOW = 365;
+    const WINDOW = 730;
     const upper = [];
     const lower = [];
     for (let i = 0; i < data.length; i++) {
