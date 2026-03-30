@@ -159,6 +159,11 @@ export default function STHMVRVChart({ sthMvrvData, loading, error }) {
   );
 
   // Bandas ±1σ do preço realizado STH (janela 365 dias)
+  // Calcula média e desvio padrão do STH MVRV na janela,
+  // depois projeta no preço: banda = realized_price × (mean ± std)
+  // Mostra a que preço o BTC estaria se o MVRV estivesse em mean±std.
+  // O preço BTC fica dentro das bandas ~64% do tempo (±1σ normal).
+  // O preço realizado pode cruzar as bandas em períodos extremos — isso é esperado.
   const bandData = useMemo(() => {
     if (!data.length) return { upper: [], lower: [] };
     const WINDOW = 365;
@@ -172,7 +177,6 @@ export default function STHMVRVChart({ sthMvrvData, loading, error }) {
         lower.push([date, null]);
         continue;
       }
-      // Calcular média e desvio padrão do MVRV na janela
       let sum = 0, sumSq = 0;
       for (let j = i - WINDOW + 1; j <= i; j++) {
         sum += data[j][3];
@@ -181,8 +185,6 @@ export default function STHMVRVChart({ sthMvrvData, loading, error }) {
       const mean = sum / WINDOW;
       const variance = sumSq / WINDOW - mean * mean;
       const std = Math.sqrt(Math.max(0, variance));
-      // Bandas = realized_price × (mean ± std)
-      // Equivale a: preço que o BTC teria se o MVRV estivesse em mean±std
       const upperVal = realized * (mean + std);
       const lowerVal = realized * Math.max(0, mean - std);
       upper.push([date, Math.round(upperVal * 100) / 100]);
@@ -431,7 +433,7 @@ export default function STHMVRVChart({ sthMvrvData, loading, error }) {
                 left: 36,
                 top: 21,
                 style: {
-                  text: '+1σ (sobrevalorizado)',
+                  text: '+1σ MVRV (sobrevalorizado)',
                   fill: '#e85a6f',
                   fontSize: 9,
                   fontFamily: 'JetBrains Mono, monospace',
@@ -447,7 +449,7 @@ export default function STHMVRVChart({ sthMvrvData, loading, error }) {
                 left: 36,
                 top: 36,
                 style: {
-                  text: '−1σ (subvalorizado)',
+                  text: '−1σ MVRV (subvalorizado)',
                   fill: '#4a9eed',
                   fontSize: 9,
                   fontFamily: 'JetBrains Mono, monospace',
