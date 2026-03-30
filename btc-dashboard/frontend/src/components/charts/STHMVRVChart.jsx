@@ -321,11 +321,11 @@ export default function STHMVRVChart({ sthMvrvData, loading, error }) {
             <div style="margin-top:4px;padding-top:4px;border-top:1px solid #252540">
               <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
                 <span style="width:10px;height:0;border-top:1px dashed #e85a6f;flex-shrink:0"></span>
-                <span style="font-family:JetBrains Mono,monospace;font-size:10px;color:#e85a6f">+1σ: ${formatPriceFull(bandData.upper[idx][1])}</span>
+                <span style="font-family:JetBrains Mono,monospace;font-size:10px;color:#e85a6f">+1 Desvio Padrão: ${formatPriceFull(bandData.upper[idx][1])}</span>
               </div>
               <div style="display:flex;align-items:center;gap:6px">
                 <span style="width:10px;height:0;border-top:1px dashed #4a9eed;flex-shrink:0"></span>
-                <span style="font-family:JetBrains Mono,monospace;font-size:10px;color:#4a9eed">−1σ: ${formatPriceFull(bandData.lower[idx][1])}</span>
+                <span style="font-family:JetBrains Mono,monospace;font-size:10px;color:#4a9eed">−1 Desvio Padrão: ${formatPriceFull(bandData.lower[idx][1])}</span>
               </div>
             </div>` : ''}`;
         },
@@ -400,7 +400,7 @@ export default function STHMVRVChart({ sthMvrvData, loading, error }) {
           children: [
             {
               type: 'rect',
-              shape: { width: 270, height: showBands ? 50 : 20, r: 4 },
+              shape: { width: 270, height: 20, r: 4 },
               style: { fill: 'rgba(10,10,20,0.72)', stroke: 'rgba(120,120,192,0.3)', lineWidth: 1 },
             },
             {
@@ -419,40 +419,6 @@ export default function STHMVRVChart({ sthMvrvData, loading, error }) {
                 fontFamily: 'JetBrains Mono, monospace',
               },
             },
-            ...(showBands ? [
-              {
-                type: 'line',
-                shape: { x1: 10, y1: 28, x2: 30, y2: 28 },
-                style: { stroke: '#e85a6f', lineWidth: 1, lineDash: [4, 3] },
-              },
-              {
-                type: 'text',
-                left: 36,
-                top: 21,
-                style: {
-                  text: '+1σ MVRV (sobrevalorizado)',
-                  fill: '#e85a6f',
-                  fontSize: 9,
-                  fontFamily: 'JetBrains Mono, monospace',
-                },
-              },
-              {
-                type: 'line',
-                shape: { x1: 10, y1: 43, x2: 30, y2: 43 },
-                style: { stroke: '#4a9eed', lineWidth: 1, lineDash: [4, 3] },
-              },
-              {
-                type: 'text',
-                left: 36,
-                top: 36,
-                style: {
-                  text: '−1σ MVRV (subvalorizado)',
-                  fill: '#4a9eed',
-                  fontSize: 9,
-                  fontFamily: 'JetBrains Mono, monospace',
-                },
-              },
-            ] : []),
           ],
         },
       ],
@@ -577,8 +543,8 @@ export default function STHMVRVChart({ sthMvrvData, loading, error }) {
             <button className={`scale-btn ${coloredMvrv ? 'active' : ''}`}  onClick={() => setColoredMvrv(true)}>COR</button>
             <button className={`scale-btn ${!coloredMvrv ? 'active' : ''}`} onClick={() => setColoredMvrv(false)}>SEM COR</button>
           </div>
-          <div className="toggle-group" title="Bandas ±1σ do STH MVRV (média e desvio padrão históricos)">
-            <span className="toggle-label">±1σ</span>
+          <div className="toggle-group" title="Bandas ±1 Desvio Padrão do STH MVRV (média e desvio padrão históricos)">
+            <span className="toggle-label">± 1 DP</span>
             <button className={`scale-btn ${showBands ? 'active' : ''}`}  onClick={() => setShowBands(true)}>ON</button>
             <button className={`scale-btn ${!showBands ? 'active' : ''}`} onClick={() => setShowBands(false)}>OFF</button>
           </div>
