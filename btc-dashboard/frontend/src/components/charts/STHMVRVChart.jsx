@@ -126,6 +126,7 @@ export default function STHMVRVChart({ sthMvrvData, loading, error }) {
   const [isLog, setIsLog]               = useState(true);
   const [coloredPrice, setColoredPrice] = useState(true);
   const [coloredMvrv,  setColoredMvrv]  = useState(false);
+  const [showBands,    setShowBands]     = useState(false);
   const [activePeriod, setActivePeriod] = useState('Todo');
   const [echartsReady, setEchartsReady] = useState(false);
   const [currentZoom, setCurrentZoom]   = useState({ start: 0, end: 100 });
@@ -157,6 +158,39 @@ export default function STHMVRVChart({ sthMvrvData, loading, error }) {
     [data, coloredMvrv]
   );
 
+  // Bandas ±1σ do preço realizado STH (janela 365 dias)
+  const bandData = useMemo(() => {
+    if (!data.length) return { upper: [], lower: [] };
+    const WINDOW = 365;
+    const upper = [];
+    const lower = [];
+    for (let i = 0; i < data.length; i++) {
+      const date = new Date(data[i][0]).toISOString().split('T')[0];
+      const realized = data[i][2];
+      if (i < WINDOW - 1) {
+        upper.push([date, null]);
+        lower.push([date, null]);
+        continue;
+      }
+      // Calcular média e desvio padrão do MVRV na janela
+      let sum = 0, sumSq = 0;
+      for (let j = i - WINDOW + 1; j <= i; j++) {
+        sum += data[j][3];
+        sumSq += data[j][3] * data[j][3];
+      }
+      const mean = sum / WINDOW;
+      const variance = sumSq / WINDOW - mean * mean;
+      const std = Math.sqrt(Math.max(0, variance));
+      // Bandas = realized_price × (mean ± std)
+      // Equivale a: preço que o BTC teria se o MVRV estivesse em mean±std
+      const upperVal = realized * (mean + std);
+      const lowerVal = realized * Math.max(0, mean - std);
+      upper.push([date, Math.round(upperVal * 100) / 100]);
+      lower.push([date, Math.round(lowerVal * 100) / 100]);
+    }
+    return { upper, lower };
+  }, [data]);
+
   const buildOption = useCallback((zoom) => {
     if (!data.length) return null;
     const z = zoom || zoomRange;
@@ -182,6 +216,12 @@ export default function STHMVRVChart({ sthMvrvData, loading, error }) {
       const i1 = Math.ceil((z.end   / 100) * (data.length - 1));
       const vis = data.slice(i0, i1 + 1);
       const prices = vis.flatMap(d => [d[1], d[2]]).filter(v => v > 0);
+      // Include band values when bands are visible
+      if (showBands) {
+        const visBandU = bandData.upper.slice(i0, i1 + 1).map(d => d[1]).filter(v => v > 0);
+        const visBandL = bandData.lower.slice(i0, i1 + 1).map(d => d[1]).filter(v => v > 0);
+        prices.push(...visBandU, ...visBandL);
+      }
       if (prices.length) {
         yPriceBounds = {
           min: Math.pow(10, Math.log10(Math.min(...prices)) - 0.1),
@@ -278,7 +318,17 @@ export default function STHMVRVChart({ sthMvrvData, loading, error }) {
             <div style="display:flex;align-items:center;gap:6px">
               <span style="width:6px;height:6px;border-radius:50%;background:${color};flex-shrink:0"></span>
               <span style="font-family:JetBrains Mono,monospace;font-size:12px;font-weight:600;color:${color}">STH MVRV: ${mvrv?.toFixed(3) ?? '—'}</span>
-            </div>`;
+            </div>${showBands && idx < bandData.upper.length && bandData.upper[idx][1] != null ? `
+            <div style="margin-top:4px;padding-top:4px;border-top:1px solid #252540">
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
+                <span style="width:10px;height:0;border-top:1px dashed #e85a6f;flex-shrink:0"></span>
+                <span style="font-family:JetBrains Mono,monospace;font-size:10px;color:#e85a6f">+1σ: ${formatPriceFull(bandData.upper[idx][1])}</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:6px">
+                <span style="width:10px;height:0;border-top:1px dashed #4a9eed;flex-shrink:0"></span>
+                <span style="font-family:JetBrains Mono,monospace;font-size:10px;color:#4a9eed">−1σ: ${formatPriceFull(bandData.lower[idx][1])}</span>
+              </div>
+            </div>` : ''}`;
         },
       },
       axisPointer: { link: [{ xAxisIndex: 'all' }] },
@@ -343,37 +393,94 @@ export default function STHMVRVChart({ sthMvrvData, loading, error }) {
         },
         { type: 'inside', xAxisIndex: [0, 1], start: z.start, end: z.end },
       ],
-      graphic: [{
-        type: 'group',
-        left: 80,
-        top: 22,
-        children: [
-          {
-            type: 'rect',
-            shape: { width: 270, height: 20, r: 4 },
-            style: { fill: 'rgba(10,10,20,0.72)', stroke: 'rgba(120,120,192,0.3)', lineWidth: 1 },
-          },
-          {
-            type: 'line',
-            shape: { x1: 10, y1: 10, x2: 30, y2: 10 },
-            style: { stroke: '#7878c0', lineWidth: 1.5, lineDash: [4, 3] },
-          },
-          {
-            type: 'text',
-            left: 36,
-            top: 3,
-            style: {
-              text: 'Linha tracejada = Preço Realizado STH',
-              fill: '#9090c8',
-              fontSize: 10,
-              fontFamily: 'JetBrains Mono, monospace',
+      graphic: [
+        {
+          type: 'group',
+          left: 80,
+          top: 22,
+          children: [
+            {
+              type: 'rect',
+              shape: { width: 270, height: showBands ? 50 : 20, r: 4 },
+              style: { fill: 'rgba(10,10,20,0.72)', stroke: 'rgba(120,120,192,0.3)', lineWidth: 1 },
             },
-          },
-        ],
-      }],
+            {
+              type: 'line',
+              shape: { x1: 10, y1: 10, x2: 30, y2: 10 },
+              style: { stroke: '#7878c0', lineWidth: 1.5, lineDash: [4, 3] },
+            },
+            {
+              type: 'text',
+              left: 36,
+              top: 3,
+              style: {
+                text: 'Linha tracejada = Preço Realizado STH',
+                fill: '#9090c8',
+                fontSize: 10,
+                fontFamily: 'JetBrains Mono, monospace',
+              },
+            },
+            ...(showBands ? [
+              {
+                type: 'line',
+                shape: { x1: 10, y1: 28, x2: 30, y2: 28 },
+                style: { stroke: '#e85a6f', lineWidth: 1, lineDash: [4, 3] },
+              },
+              {
+                type: 'text',
+                left: 36,
+                top: 21,
+                style: {
+                  text: '+1σ (sobrevalorizado)',
+                  fill: '#e85a6f',
+                  fontSize: 9,
+                  fontFamily: 'JetBrains Mono, monospace',
+                },
+              },
+              {
+                type: 'line',
+                shape: { x1: 10, y1: 43, x2: 30, y2: 43 },
+                style: { stroke: '#4a9eed', lineWidth: 1, lineDash: [4, 3] },
+              },
+              {
+                type: 'text',
+                left: 36,
+                top: 36,
+                style: {
+                  text: '−1σ (subvalorizado)',
+                  fill: '#4a9eed',
+                  fontSize: 9,
+                  fontFamily: 'JetBrains Mono, monospace',
+                },
+              },
+            ] : []),
+          ],
+        },
+      ],
       series: [
         basePriceSeries,
         realizedSeries,
+        // Bandas ±1σ (quando ativas)
+        ...(showBands ? [
+          {
+            type: 'line', name: '__band_upper__',
+            xAxisIndex: 0, yAxisIndex: 0,
+            data: bandData.upper,
+            symbol: 'none', smooth: false,
+            lineStyle: { color: '#e85a6f', width: 1, type: 'dashed', opacity: 0.6 },
+            silent: true, emphasis: { disabled: true },
+            z: 2,
+          },
+          {
+            type: 'line', name: '__band_lower__',
+            xAxisIndex: 0, yAxisIndex: 0,
+            data: bandData.lower,
+            symbol: 'none', smooth: false,
+            lineStyle: { color: '#4a9eed', width: 1, type: 'dashed', opacity: 0.6 },
+            silent: true, emphasis: { disabled: true },
+            z: 2,
+          },
+        ] : []),
         baseMvrvSeries,
         ...sthAreaSeries,
         ...(!coloredMvrv ? [{
@@ -389,7 +496,7 @@ export default function STHMVRVChart({ sthMvrvData, loading, error }) {
         ...coloredMvrvLine,
       ],
     };
-  }, [data, isLog, coloredPrice, coloredMvrv, zoomRange, coloredPriceSeries, sthAreaSeries, coloredMvrvLine]);
+  }, [data, isLog, coloredPrice, coloredMvrv, showBands, bandData, zoomRange, coloredPriceSeries, sthAreaSeries, coloredMvrvLine]);
 
   /* ─── init chart ─── */
   useEffect(() => {
@@ -424,7 +531,7 @@ export default function STHMVRVChart({ sthMvrvData, loading, error }) {
     if (!chart || !data.length) return;
     const option = buildOption(currentZoom);
     if (option) chart.setOption(option, { notMerge: false, replaceMerge: ['series'] });
-  }, [isLog, coloredPrice, coloredMvrv, zoomRange, currentZoom, buildOption]);
+  }, [isLog, coloredPrice, coloredMvrv, showBands, zoomRange, currentZoom, buildOption]);
 
   const latest      = data[data.length - 1];
   const latestColor = latest ? sthMvrvColor(latest[3]) : '#9090b0';
@@ -470,6 +577,11 @@ export default function STHMVRVChart({ sthMvrvData, loading, error }) {
             <span className="toggle-label">MVRV</span>
             <button className={`scale-btn ${coloredMvrv ? 'active' : ''}`}  onClick={() => setColoredMvrv(true)}>COR</button>
             <button className={`scale-btn ${!coloredMvrv ? 'active' : ''}`} onClick={() => setColoredMvrv(false)}>SEM COR</button>
+          </div>
+          <div className="toggle-group" title="Bandas ±1σ do preço realizado STH (janela 365 dias)">
+            <span className="toggle-label">±1σ</span>
+            <button className={`scale-btn ${showBands ? 'active' : ''}`}  onClick={() => setShowBands(true)}>ON</button>
+            <button className={`scale-btn ${!showBands ? 'active' : ''}`} onClick={() => setShowBands(false)}>OFF</button>
           </div>
         </div>
       </div>
