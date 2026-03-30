@@ -158,32 +158,29 @@ export default function STHMVRVChart({ sthMvrvData, loading, error }) {
     [data, coloredMvrv]
   );
 
-  // Bandas ±1σ do preço realizado STH (janela 365 dias)
-  // Calcula média e desvio padrão do STH MVRV na janela,
+  // Bandas ±1σ do preço realizado STH (All-Time Mean ± All-Time Std)
+  // Calcula média e desvio padrão acumulados do STH MVRV desde o início,
   // depois projeta no preço: banda = realized_price × (mean ± std)
-  // Mostra a que preço o BTC estaria se o MVRV estivesse em mean±std.
-  // O preço BTC fica dentro das bandas ~64% do tempo (±1σ normal).
-  // O preço realizado pode cruzar as bandas em períodos extremos — isso é esperado.
   const bandData = useMemo(() => {
     if (!data.length) return { upper: [], lower: [] };
-    const WINDOW = 730;
     const upper = [];
     const lower = [];
+    let sum = 0, sumSq = 0;
     for (let i = 0; i < data.length; i++) {
       const date = new Date(data[i][0]).toISOString().split('T')[0];
       const realized = data[i][2];
-      if (i < WINDOW - 1) {
+      const mvrv = data[i][3];
+      sum += mvrv;
+      sumSq += mvrv * mvrv;
+      const n = i + 1;
+      if (n < 30) {
+        // Precisa de pelo menos 30 dias para estatística mínima
         upper.push([date, null]);
         lower.push([date, null]);
         continue;
       }
-      let sum = 0, sumSq = 0;
-      for (let j = i - WINDOW + 1; j <= i; j++) {
-        sum += data[j][3];
-        sumSq += data[j][3] * data[j][3];
-      }
-      const mean = sum / WINDOW;
-      const variance = sumSq / WINDOW - mean * mean;
+      const mean = sum / n;
+      const variance = sumSq / n - mean * mean;
       const std = Math.sqrt(Math.max(0, variance));
       const upperVal = realized * (mean + std);
       const lowerVal = realized * Math.max(0, mean - std);
@@ -580,7 +577,7 @@ export default function STHMVRVChart({ sthMvrvData, loading, error }) {
             <button className={`scale-btn ${coloredMvrv ? 'active' : ''}`}  onClick={() => setColoredMvrv(true)}>COR</button>
             <button className={`scale-btn ${!coloredMvrv ? 'active' : ''}`} onClick={() => setColoredMvrv(false)}>SEM COR</button>
           </div>
-          <div className="toggle-group" title="Bandas ±1σ do preço realizado STH (janela 365 dias)">
+          <div className="toggle-group" title="Bandas ±1σ do STH MVRV (média e desvio padrão históricos)">
             <span className="toggle-label">±1σ</span>
             <button className={`scale-btn ${showBands ? 'active' : ''}`}  onClick={() => setShowBands(true)}>ON</button>
             <button className={`scale-btn ${!showBands ? 'active' : ''}`} onClick={() => setShowBands(false)}>OFF</button>
