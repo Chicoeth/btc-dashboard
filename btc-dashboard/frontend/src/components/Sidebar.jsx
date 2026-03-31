@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { Bitcoin, TrendingUp, Activity, BarChart2, Users, Divide, GitCompareArrows, Building2, Landmark } from 'lucide-react';
+import { Bitcoin, TrendingUp, Activity, BarChart2, Users, Divide, GitCompareArrows, Building2, Landmark, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 
 const NAV = [
   { label: 'Preço Histórico',        href: '/mercado/preco',                icon: TrendingUp       },
@@ -13,20 +13,22 @@ const NAV = [
   { label: 'ETFs de Bitcoin',        href: '/indicadores/etf-holdings',      icon: Landmark         },
 ];
 
-export default function Sidebar() {
+export default function Sidebar({ collapsed, onToggle }) {
   const router = useRouter();
 
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar ${collapsed ? 'sidebar--collapsed' : ''}`}>
       <div className="logo">
         <div className="logo-icon"><Bitcoin size={18} strokeWidth={2} /></div>
-        <div className="logo-text">
-          <span className="logo-title">BTC</span>
-          <span className="logo-subtitle">Metrics</span>
-        </div>
+        {!collapsed && (
+          <div className="logo-text">
+            <span className="logo-title">BTC</span>
+            <span className="logo-subtitle">Metrics</span>
+          </div>
+        )}
       </div>
 
-      <div className="nav-section-label">INDICADORES</div>
+      {!collapsed && <div className="nav-section-label">INDICADORES</div>}
 
       <nav className="sidebar-nav">
         {NAV.map(({ label, href, icon: Icon, soon }) => {
@@ -36,23 +38,36 @@ export default function Sidebar() {
               key={href}
               href={soon ? '#' : href}
               className={`nav-item ${active ? 'nav-item--active' : ''} ${soon ? 'nav-item--soon' : ''}`}
+              title={collapsed ? label : undefined}
             >
               <span className="nav-icon"><Icon size={15} strokeWidth={1.5} /></span>
-              <span className="nav-label">{label}</span>
-              {soon && <span className="soon-badge">em breve</span>}
+              {!collapsed && <span className="nav-label">{label}</span>}
+              {!collapsed && soon && <span className="soon-badge">em breve</span>}
             </Link>
           );
         })}
       </nav>
 
-      <div className="sidebar-footer">
-        <span>Dados atualizados diariamente</span>
-      </div>
+      <button className="sidebar-toggle" onClick={onToggle} title={collapsed ? 'Expandir menu' : 'Recolher menu'}>
+        {collapsed
+          ? <PanelLeftOpen size={16} strokeWidth={1.5} />
+          : <PanelLeftClose size={16} strokeWidth={1.5} />
+        }
+      </button>
+
+      {!collapsed && (
+        <div className="sidebar-footer">
+          <span>Dados atualizados diariamente</span>
+        </div>
+      )}
 
       <style jsx>{`
         .logo {
           display:flex; align-items:center; gap:10px;
           padding:20px 16px 18px; border-bottom:1px solid var(--border-subtle); margin-bottom:8px;
+        }
+        .sidebar--collapsed .logo {
+          justify-content:center; padding:20px 0 18px;
         }
         .logo-icon {
           width:32px; height:32px; flex-shrink:0;
@@ -84,6 +99,9 @@ export default function Sidebar() {
           transition:color 0.15s, background 0.15s;
           position:relative; font-family:var(--font-body); letter-spacing:0.01em;
         }
+        .sidebar--collapsed .nav-item {
+          justify-content:center; padding:10px 0;
+        }
         .nav-item:hover { color:var(--text-primary); background:rgba(255,255,255,0.03); }
         .nav-item--active {
           color:var(--brand-orange) !important;
@@ -103,6 +121,21 @@ export default function Sidebar() {
           font-size:9px; font-family:var(--font-mono); text-transform:uppercase;
           letter-spacing:0.05em; background:rgba(247,147,26,0.1);
           color:var(--brand-orange); padding:1px 5px; border-radius:3px; opacity:0.7;
+        }
+
+        .sidebar-toggle {
+          display:flex; align-items:center; justify-content:center;
+          margin:0 12px 8px; padding:8px;
+          background:transparent; border:1px solid var(--border-subtle);
+          border-radius:6px; color:var(--text-muted); cursor:pointer;
+          transition:color 0.15s, border-color 0.15s, background 0.15s;
+        }
+        .sidebar--collapsed .sidebar-toggle {
+          margin:0 8px 8px;
+        }
+        .sidebar-toggle:hover {
+          color:var(--text-primary); border-color:var(--border-default);
+          background:rgba(255,255,255,0.03);
         }
 
         .sidebar-footer {
