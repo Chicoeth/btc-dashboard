@@ -1,10 +1,13 @@
+import { useState } from 'react';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 
 export default function Layout({ children }) {
+  const [collapsed, setCollapsed] = useState(false);
+
   return (
-    <div className="layout">
-      <Sidebar />
+    <div className={`layout ${collapsed ? 'sidebar-collapsed' : ''}`}>
+      <Sidebar collapsed={collapsed} onToggle={() => setCollapsed(c => !c)} />
       <div className="main-content">
         <TopBar />
         <main className="page-main">
