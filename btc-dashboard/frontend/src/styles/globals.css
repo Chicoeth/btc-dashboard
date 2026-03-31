@@ -27,6 +27,7 @@
   --text-accent: #f7931a;
 
   --sidebar-width: 260px;
+  --sidebar-collapsed-width: 56px;
 }
 
 * {
@@ -93,6 +94,11 @@ body::before {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  transition: margin-left 0.25s ease;
+}
+
+.sidebar-collapsed .main-content {
+  margin-left: var(--sidebar-collapsed-width);
 }
 
 /* Sidebar */
@@ -108,6 +114,11 @@ body::before {
   flex-direction: column;
   z-index: 100;
   overflow: hidden;
+  transition: width 0.25s ease;
+}
+
+.sidebar--collapsed {
+  width: var(--sidebar-collapsed-width);
 }
 
 .sidebar::after {
