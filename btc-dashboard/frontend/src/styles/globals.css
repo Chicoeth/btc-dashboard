@@ -175,3 +175,162 @@ body::before {
 .ticker-content:hover {
   animation-play-state: paused;
 }
+
+@keyframes ticker {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+/* ═══════════════════════════════════════════
+   MOBILE RESPONSIVE — Sidebar as drawer
+   ═══════════════════════════════════════════ */
+
+@media (max-width: 768px) {
+
+  /* ─── Layout: remove sidebar margin ─── */
+  .main-content {
+    margin-left: 0 !important;
+  }
+
+  /* ─── Sidebar: off-screen drawer ─── */
+  .sidebar {
+    width: 280px;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+    z-index: 200;
+    box-shadow: none;
+  }
+
+  /* When mobile-open, slide in */
+  .sidebar--mobile-open {
+    transform: translateX(0);
+    box-shadow: 8px 0 32px rgba(0, 0, 0, 0.5);
+  }
+
+  /* Ignore desktop collapsed state on mobile */
+  .sidebar--collapsed {
+    width: 280px;
+  }
+
+  /* ─── Page card: tighter on mobile ─── */
+  .page-card {
+    border-radius: 8px;
+    margin-bottom: 12px;
+  }
+
+  /* ─── Home page stats grid ─── */
+  .stats-row {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+  }
+
+  /* ─── Info panels: single column ─── */
+  .info-panel,
+  .info-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* ─── Page headers: smaller text ─── */
+  .page-title {
+    font-size: 18px !important;
+  }
+
+  .page-sub,
+  .page-desc {
+    font-size: 11px !important;
+  }
+
+  .page-header {
+    gap: 8px !important;
+  }
+
+  .page-icon {
+    width: 30px !important;
+    height: 30px !important;
+  }
+
+  /* ─── Chart controls: wrap tightly ─── */
+  .chart-header {
+    padding: 8px 10px !important;
+    gap: 6px !important;
+  }
+
+  .chart-controls {
+    gap: 4px !important;
+  }
+
+  .period-btn {
+    padding: 4px 6px !important;
+    font-size: 9px !important;
+  }
+
+  .scale-btn {
+    padding: 4px 6px !important;
+    font-size: 9px !important;
+  }
+
+  .toggle-label {
+    font-size: 8px !important;
+  }
+
+  /* ─── Price display in chart headers ─── */
+  .price-display {
+    font-size: 15px !important;
+  }
+
+  /* ─── Badges in chart headers ─── */
+  .fng-badge,
+  .mvrv-badge,
+  .mayer-badge,
+  .strategy-badge {
+    font-size: 10px !important;
+    padding: 2px 7px !important;
+  }
+
+  /* ─── Chart footer ─── */
+  .chart-footer {
+    padding: 6px 10px !important;
+    font-size: 8px !important;
+  }
+
+  /* ─── Legend sidebar: below chart on narrow screens ─── */
+  .legend {
+    flex-direction: row !important;
+    padding: 8px 12px 12px !important;
+  }
+
+  /* ─── Mode selector (CycleChart) ─── */
+  .mode-selector {
+    flex-wrap: wrap !important;
+    gap: 4px !important;
+    padding: 8px 10px !important;
+  }
+
+  .mode-btn {
+    font-size: 11px !important;
+    padding: 6px 10px !important;
+  }
+
+  /* ─── Check boxes (CycleChart) ─── */
+  .check-box {
+    font-size: 10px !important;
+    padding: 4px 8px !important;
+  }
+
+  /* ─── Flow unit toggle (ETFChart) ─── */
+  .flow-unit-toggle {
+    bottom: 4px !important;
+    right: 4px !important;
+  }
+
+  .flow-unit-btn {
+    font-size: 9px !important;
+    padding: 2px 5px !important;
+  }
+
+  /* ─── Graphic overlays (legend boxes inside chart) ─── */
+  .echarts-canvas [class*="graphic"] {
+    transform: scale(0.85);
+    transform-origin: top left;
+  }
+}
