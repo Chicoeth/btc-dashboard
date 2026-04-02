@@ -45,7 +45,7 @@ export default function ETFChart({ etfData, loading, error }) {
   const chartInst = useRef(null);
   const [isLog, setIsLog]               = useState(true);
   const [showByTicker, setShowByTicker]  = useState(false);
-  const [showFlows, setShowFlows]        = useState(false);
+  const [showFlows, setShowFlows]        = useState(true);
   const [flowUnit, setFlowUnit]          = useState('USD'); // 'USD' or 'BTC'
   const [activePeriod, setActivePeriod]  = useState('Todo');
   const [echartsReady, setEchartsReady]  = useState(false);
