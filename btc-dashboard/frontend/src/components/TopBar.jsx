@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowUp, ArrowDown, Clock } from 'lucide-react';
+import { ArrowUp, ArrowDown, Clock, Menu } from 'lucide-react';
 
 const MOCK_STATS = [
   { label: 'BTC/USD', value: '—', change: null },
@@ -14,7 +14,7 @@ function formatTime(date) {
   return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
-export default function TopBar() {
+export default function TopBar({ isMobile, onMenuClick }) {
   const [time, setTime] = useState('');
 
   useEffect(() => {
@@ -27,9 +27,15 @@ export default function TopBar() {
 
   return (
     <header className="topbar">
-      {/* Left: page title area */}
+      {/* Left: hamburger on mobile, divider on desktop */}
       <div className="topbar-left">
-        <div className="topbar-divider" />
+        {isMobile ? (
+          <button className="hamburger-btn" onClick={onMenuClick} aria-label="Abrir menu">
+            <Menu size={20} strokeWidth={1.5} />
+          </button>
+        ) : (
+          <div className="topbar-divider" />
+        )}
       </div>
 
       {/* Right: time + status */}
@@ -66,6 +72,23 @@ export default function TopBar() {
           display: flex;
           align-items: center;
           gap: 12px;
+        }
+
+        .hamburger-btn {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: none;
+          border: 1px solid var(--border-subtle);
+          border-radius: 6px;
+          color: var(--text-secondary);
+          padding: 6px;
+          cursor: pointer;
+          transition: color 0.15s, border-color 0.15s;
+        }
+        .hamburger-btn:hover {
+          color: var(--text-primary);
+          border-color: var(--border-default);
         }
 
         .topbar-divider {
@@ -127,6 +150,19 @@ export default function TopBar() {
           padding: 3px 8px;
           border-radius: 4px;
           letter-spacing: 0.03em;
+        }
+
+        @media (max-width: 768px) {
+          .topbar {
+            padding: 0 12px;
+            height: 44px;
+          }
+          .topbar-badge {
+            display: none;
+          }
+          .topbar-right {
+            gap: 10px;
+          }
         }
       `}</style>
     </header>
