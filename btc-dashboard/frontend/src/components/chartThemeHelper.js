@@ -45,6 +45,17 @@ const COLOR_PAIRS = [
   ['rgba(255,255,255,0.05)', 'rgba(0,0,0,0.06)'],
   ['rgba(247,147,26,0)', 'rgba(247,147,26,0)'],
   ['rgba(247,147,26,0.00)', 'rgba(247,147,26,0)'],
+
+  // CycleChart std deviation bands
+  ['rgba(232,232,240,0.1)', 'rgba(100,100,160,0.12)'],
+  ['rgba(232,232,240,0.3)', 'rgba(100,100,160,0.35)'],
+
+  // ETF flow bar borders
+  ['rgba(60,60,90,0.7)', 'rgba(160,160,190,0.5)'],
+
+  // ETF flow-unit-toggle background (tooltip-like overlays)
+  ['rgba(10,10,20,0.85)', 'rgba(255,255,255,0.9)'],
+
   ['#0a0a0f', '#f5f5fa'],
 ];
 
