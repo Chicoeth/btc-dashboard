@@ -30,6 +30,40 @@
   --sidebar-collapsed-width: 56px;
 }
 
+[data-theme="light"] {
+  --bg-primary: #f5f5fa;
+  --bg-secondary: #eeeef4;
+  --bg-card: #ffffff;
+  --bg-hover: #e8e8f0;
+
+  --border-subtle: #d0d0d8;
+  --border-default: #b8b8c8;
+  --border-bright: #a0a0b8;
+
+  --text-primary: #1a1a2e;
+  --text-secondary: #5a5a70;
+  --text-muted: #8a8a9e;
+  --text-accent: #d97b06;
+}
+
+/* Desabilitar noise overlay no modo claro */
+[data-theme="light"] body::before {
+  opacity: 0;
+}
+
+/* Scrollbar mais clara */
+[data-theme="light"] ::-webkit-scrollbar-track {
+  background: #eeeef4;
+}
+[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background: #b8b8c8;
+}
+
+/* Sidebar glow mais visível no claro */
+[data-theme="light"] .sidebar::after {
+  opacity: 0.25;
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
