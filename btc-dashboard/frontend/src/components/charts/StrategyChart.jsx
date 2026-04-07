@@ -1,4 +1,6 @@
 import { useRef, useState, useEffect, useMemo, useCallback } from 'react';
+import { useTheme } from '../ThemeContext';
+import { patchOption } from '../chartThemeHelper';
 
 const PERIODS = [
   { label: '1A', months: 12 },
@@ -24,6 +26,7 @@ function formatHoldings(v) {
 export default function StrategyChart({ strategyData, priceData, loading, error }) {
   const chartRef  = useRef(null);
   const chartInst = useRef(null);
+  const { isDark } = useTheme();
   const [isLog, setIsLog]               = useState(true);
   const [showHoldings, setShowHoldings]  = useState(true);
   const [showMvrv, setShowMvrv]          = useState(false);
@@ -433,7 +436,7 @@ export default function StrategyChart({ strategyData, priceData, loading, error 
         });
       }
       const option = buildOption(zoomRange);
-      if (option) chart.setOption(option, { notMerge: true });
+      if (option) chart.setOption(patchOption(option, isDark), { notMerge: true });
       setCurrentZoom(zoomRange);
     };
     init();
@@ -446,8 +449,8 @@ export default function StrategyChart({ strategyData, priceData, loading, error 
     if (!chart || !data.length) return;
     chart.resize();
     const option = buildOption(currentZoom);
-    if (option) chart.setOption(option, { notMerge: true });
-  }, [isLog, showHoldings, showMvrv, showBuys, zoomRange, currentZoom, buildOption, chartHeight]);
+    if (option) chart.setOption(patchOption(option, isDark), { notMerge: true });
+  }, [isLog, showHoldings, showMvrv, showBuys, zoomRange, currentZoom, buildOption, chartHeight, isDark]);
 
   const latest = data.length ? data[data.length - 1] : null;
   const plPercent = latest ? ((latest.btcPrice - latest.costBasis) / latest.costBasis * 100).toFixed(1) : 0;
