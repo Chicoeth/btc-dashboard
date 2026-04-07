@@ -11,7 +11,6 @@ import { patchOption } from '../chartThemeHelper';
 const PALETTE = ['#3b82f6', '#22c55e', '#a855f7', '#ec4899', '#14b8a6'];
 const ORANGE   = '#f7931a';
 const MEAN_COLOR = '#e8e8f0';
-const BG_COLOR   = '#0a0a0f';
 
 function getCycleColor(index, total) {
   if (index === total - 1) return ORANGE; // atual = laranja
@@ -235,14 +234,13 @@ export default function CycleChart({ priceData, loading, error }) {
       return {
         type: 'line',
         name: c.label,
-        // color aqui é a propriedade top-level que o ECharts usa para o ícone da legenda
         color,
         data: seriesList[i].map(([d, v]) => [d, v]),
         smooth: false,
         symbol: 'none',
         lineStyle: {
           color,
-          width: i === total - 1 ? 2 : 1.2, // atual levemente mais grossa; média terá 2.5
+          width: i === total - 1 ? 2 : 1.2,
         },
         itemStyle: { color },
         emphasis: { disabled: true },
@@ -253,25 +251,28 @@ export default function CycleChart({ priceData, loading, error }) {
     const extraSeries = [];
 
     if (showMean && mean.length) {
+      const meanColor = isDark ? '#e8e8f0' : '#1a1a2e';
       extraSeries.push({
         type: 'line',
         name: 'Média',
-        color: MEAN_COLOR,
+        color: meanColor,
         data: mean.map(([d, v]) => [d, v]),
         smooth: false,
         symbol: 'none',
-        lineStyle: { color: MEAN_COLOR, width: 2.5, type: 'dashed' },
-        itemStyle: { color: MEAN_COLOR },
+        lineStyle: { color: meanColor, width: 2.5, type: 'dashed' },
+        itemStyle: { color: meanColor },
         emphasis: { disabled: true },
         z: 6,
       });
 
       if (showStd && upper.length && lower.length) {
-        // Cor de masking deve ser igual ao fundo real do card
+        // Cor de masking = fundo do card (não da página)
         const maskColor = isDark ? '#111120' : '#ffffff';
         const bandLine  = isDark ? 'rgba(232,232,240,0.3)' : 'rgba(100,100,160,0.4)';
         const bandFill  = isDark ? 'rgba(232,232,240,0.1)' : 'rgba(100,100,160,0.15)';
 
+        // Técnica de masking: upper preenche para baixo com cor da banda,
+        // lower preenche para baixo com cor do fundo (apaga a parte abaixo)
         extraSeries.push({
           type: 'line',
           name: '__std_upper__',
@@ -295,6 +296,7 @@ export default function CycleChart({ priceData, loading, error }) {
           z: 2, silent: true, emphasis: { disabled: true }, legendHoverLink: false,
         });
       }
+    }
 
     return {
       backgroundColor: 'transparent',
@@ -309,13 +311,13 @@ export default function CycleChart({ priceData, loading, error }) {
         itemHeight: 2,
         icon: 'rect',
         textStyle: { color: '#9090b0', fontFamily: 'JetBrains Mono, monospace', fontSize: 10 },
-        inactiveColor: '#2a2a42',      // série desmarcada fica bem apagada
+        inactiveColor: '#2a2a42',
         inactiveBorderColor: '#2a2a42',
         pageButtonItemGap: 5,
         pageTextStyle: { color: '#5a5a80', fontFamily: 'JetBrains Mono, monospace', fontSize: 10 },
         formatter: name => name.startsWith('__') ? null : name,
         selectedMode: true,
-        selected: legendSelected, // preserva o estado visual após re-render
+        selected: legendSelected,
       },
       tooltip: {
         trigger: 'axis',
@@ -378,13 +380,12 @@ export default function CycleChart({ priceData, loading, error }) {
           },
         },
         splitLine: { lineStyle: { color: '#1e1e35', type: 'dashed' } },
-        // Dinâmico: ajusta ao range das séries visíveis
         min: Math.max(0.001, yMin * 0.75),
         max: yMax * 1.3,
       },
       series: [...mainSeries, ...extraSeries],
     };
-  }, [cycleDefs, seriesList, showMean, showStd, mean, upper, lower, priceData, legendSelected, xPeriod]);
+  }, [cycleDefs, seriesList, showMean, showStd, mean, upper, lower, priceData, legendSelected, xPeriod, isDark]);
 
   // ── Init ──
   useEffect(() => {
