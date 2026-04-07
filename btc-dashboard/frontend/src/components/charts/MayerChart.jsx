@@ -1,4 +1,6 @@
 import { useRef, useState, useEffect, useMemo, useCallback } from 'react';
+import { useTheme } from '../ThemeContext';
+import { patchOption } from '../chartThemeHelper';
 
 /* ─── helpers ─── */
 const MONTHS_PT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
@@ -110,6 +112,8 @@ function buildColoredPriceSegments(rows) {
 export default function MayerChart({ priceData, loading, error }) {
   const chartRef  = useRef(null);
   const chartInst = useRef(null);
+
+  const { isDark } = useTheme();
 
   const [isLog, setIsLog]               = useState(true);
   const [coloredPrice, setColoredPrice] = useState(true);
@@ -369,7 +373,7 @@ export default function MayerChart({ priceData, loading, error }) {
         });
       }
       const option = buildOption(zoomRange);
-      if (option) chart.setOption(option, { notMerge: true });
+      if (option) chart.setOption(patchOption(option, isDark), { notMerge: true });
       setCurrentZoom(zoomRange);
     };
     init();
@@ -381,8 +385,8 @@ export default function MayerChart({ priceData, loading, error }) {
     const chart = chartInst.current;
     if (!chart || !data.length) return;
     const option = buildOption(currentZoom);
-    if (option) chart.setOption(option, { notMerge: false, replaceMerge: ['series'] });
-  }, [isLog, coloredPrice, zoomRange, currentZoom, buildOption]);
+    if (option) chart.setOption(patchOption(option, isDark), { notMerge: false, replaceMerge: ['series'] });
+  }, [isLog, coloredPrice, zoomRange, currentZoom, buildOption, isDark]);
 
   const latest      = data.length ? data[data.length - 1] : null;
   const latestColor = latest ? mayerColor(latest.mayer) : '#9090b0';
