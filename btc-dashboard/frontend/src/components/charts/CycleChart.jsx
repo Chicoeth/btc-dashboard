@@ -4,6 +4,8 @@
  */
 
 import { useEffect, useRef, useMemo, useState, useCallback } from 'react';
+import { useTheme } from '../ThemeContext';
+import { patchOption } from '../chartThemeHelper';
 
 // Ciclo atual sempre laranja; demais em ordem fixa
 const PALETTE = ['#3b82f6', '#22c55e', '#a855f7', '#ec4899', '#14b8a6'];
@@ -155,6 +157,8 @@ function buildMeanStdDev(seriesList) {
 export default function CycleChart({ priceData, loading, error }) {
   const chartRef  = useRef(null);
   const chartInst = useRef(null);
+
+  const { isDark } = useTheme();
 
   const [mode, setMode]                     = useState('halving');
   const [showMean, setShowMean]             = useState(false);
@@ -392,7 +396,7 @@ export default function CycleChart({ priceData, loading, error }) {
         chart.on('legendselectchanged', params => setLegendSelected({ ...params.selected }));
       }
       const option = buildOption();
-      if (option) chartInst.current.setOption(option, { notMerge: true });
+      if (option) chartInst.current.setOption(patchOption(option, isDark), { notMerge: true });
     };
     init();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -403,8 +407,8 @@ export default function CycleChart({ priceData, loading, error }) {
     const chart = chartInst.current;
     if (!chart || !priceData?.length) return;
     const option = buildOption();
-    if (option) chart.setOption(option, { notMerge: true });
-  }, [buildOption]);
+    if (option) chart.setOption(patchOption(option, isDark), { notMerge: true });
+  }, [buildOption, isDark]);
 
   const hasData      = priceData?.length > 0;
   const currentCycle = cycleDefs[cycleDefs.length - 1];
