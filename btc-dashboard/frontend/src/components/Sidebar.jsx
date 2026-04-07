@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { Bitcoin, TrendingUp, Activity, BarChart2, Users, Divide, GitCompareArrows, Building2, Landmark, PanelLeftClose, PanelLeftOpen, X } from 'lucide-react';
+import { TrendingUp, Activity, BarChart2, Users, Divide, GitCompareArrows, Building2, Landmark, PanelLeftClose, PanelLeftOpen, X } from 'lucide-react';
 
 const NAV = [
   { label: 'Preço Histórico',        href: '/mercado/preco',                icon: TrendingUp       },
@@ -44,11 +44,17 @@ export default function Sidebar({ collapsed, onToggle, isMobile, mobileOpen, onM
 
       <aside className={sidebarClass}>
         <div className="logo">
-          <div className="logo-icon"><Bitcoin size={18} strokeWidth={2} /></div>
+          <img
+            src="/paradigma-effigy.png"
+            alt="Paradigma"
+            className="logo-effigy"
+            width={32}
+            height={32}
+          />
           {(!collapsed || isMobile) && (
             <div className="logo-text">
-              <span className="logo-title">BTC</span>
-              <span className="logo-subtitle">Metrics</span>
+              <span className="logo-title">Paradigma</span>
+              <span className="logo-subtitle">Dashboard</span>
             </div>
           )}
           {/* Close button on mobile */}
@@ -130,7 +136,7 @@ export default function Sidebar({ collapsed, onToggle, isMobile, mobileOpen, onM
             border-color: var(--border-default);
           }
 
-          /* ─── Existing desktop styles ─── */
+          /* ─── Logo ─── */
           .logo {
             display:flex; align-items:center; gap:10px;
             padding:20px 16px 18px; border-bottom:1px solid var(--border-subtle); margin-bottom:8px;
@@ -138,20 +144,20 @@ export default function Sidebar({ collapsed, onToggle, isMobile, mobileOpen, onM
           .sidebar--collapsed .logo {
             justify-content:center; padding:20px 0 18px;
           }
-          .logo-icon {
+          .logo-effigy {
             width:32px; height:32px; flex-shrink:0;
-            background:linear-gradient(135deg,var(--brand-orange),#e67e0a);
-            border-radius:8px; display:flex; align-items:center; justify-content:center;
-            color:white; box-shadow:0 0 16px rgba(247,147,26,0.3);
+            border-radius:6px;
+            object-fit:contain;
           }
           .logo-text { display:flex; flex-direction:column; line-height:1; }
           .logo-title {
-            font-family:var(--font-display); font-size:16px; font-weight:800;
-            color:var(--text-primary); letter-spacing:0.08em;
+            font-family: 'Barlow', var(--font-display), sans-serif;
+            font-size:17px; font-weight:700;
+            color:var(--text-primary); letter-spacing:0.02em;
           }
           .logo-subtitle {
             font-family:var(--font-mono); font-size:9px; color:var(--text-muted);
-            letter-spacing:0.12em; text-transform:uppercase; margin-top:1px;
+            letter-spacing:0.12em; text-transform:uppercase; margin-top:2px;
           }
 
           .nav-section-label {
