@@ -4,6 +4,8 @@
  */
 
 import { useEffect, useRef, useMemo, useState, useCallback } from 'react';
+import { useTheme } from '../ThemeContext';
+import { patchOption } from '../chartThemeHelper';
 
 const HALVINGS = [
   { date: '2012-11-28', label: '1º Halving', reward: '25 BTC' },
@@ -40,6 +42,7 @@ function formatDateTooltip(dateStr) {
 export default function PriceChart({ data, loading, error }) {
   const chartRef    = useRef(null);
   const chartInst   = useRef(null);
+  const { isDark } = useTheme();
   const [isLog, setIsLog]               = useState(true);
   const [activePeriod, setActivePeriod] = useState('Todo');
   const [echartsReady, setEchartsReady] = useState(false);
@@ -277,7 +280,7 @@ export default function PriceChart({ data, loading, error }) {
           setCurrentZoom({ start, end });
         });
       }
-      if (chartOption) chart.setOption(chartOption, { notMerge: true });
+      if (chartOption) chart.setOption(patchOption(chartOption, isDark), { notMerge: true });
     };
     init();
   }, [echartsReady, data?.length]);
@@ -286,8 +289,8 @@ export default function PriceChart({ data, loading, error }) {
   useEffect(() => {
     const chart = chartInst.current;
     if (!chart || !chartOption) return;
-    chart.setOption(chartOption, { notMerge: false });
-  }, [chartOption]);
+    chart.setOption(patchOption(chartOption, isDark), { notMerge: false });
+  }, [chartOption, isDark]);
 
   // Stats — ATH usa high (índice 2), com fallback para close
   const stats = useMemo(() => {
