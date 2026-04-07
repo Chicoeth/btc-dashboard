@@ -48,8 +48,8 @@ export default function Sidebar({ collapsed, onToggle, isMobile, mobileOpen, onM
             src="/paradigma-effigy.png"
             alt="Paradigma"
             className="logo-effigy"
-            width={32}
-            height={32}
+            width={38}
+            height={38}
           />
           {(!collapsed || isMobile) && (
             <div className="logo-text">
@@ -145,8 +145,7 @@ export default function Sidebar({ collapsed, onToggle, isMobile, mobileOpen, onM
             justify-content:center; padding:20px 0 18px;
           }
           .logo-effigy {
-            width:32px; height:32px; flex-shrink:0;
-            border-radius:6px;
+            width:38px; height:38px; flex-shrink:0;
             object-fit:contain;
           }
           .logo-text { display:flex; flex-direction:column; line-height:1; }
