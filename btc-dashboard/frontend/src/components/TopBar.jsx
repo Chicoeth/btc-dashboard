@@ -1,14 +1,6 @@
 import { useState, useEffect } from 'react';
-import { ArrowUp, ArrowDown, Clock, Menu } from 'lucide-react';
-
-const MOCK_STATS = [
-  { label: 'BTC/USD', value: '—', change: null },
-  { label: 'Volume 24h', value: '—', change: null },
-  { label: 'Market Cap', value: '—', change: null },
-  { label: 'Dominância', value: '—', change: null },
-  { label: 'Halvings', value: '3', change: null },
-  { label: 'Bloco Atual', value: '—', change: null },
-];
+import { ArrowUp, ArrowDown, Clock, Menu, Sun, Moon } from 'lucide-react';
+import { useTheme } from './ThemeContext';
 
 function formatTime(date) {
   return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -16,18 +8,16 @@ function formatTime(date) {
 
 export default function TopBar({ isMobile, onMenuClick }) {
   const [time, setTime] = useState('');
+  const { theme, toggleTheme } = useTheme();
 
   useEffect(() => {
     setTime(formatTime(new Date()));
-    const interval = setInterval(() => {
-      setTime(formatTime(new Date()));
-    }, 1000);
+    const interval = setInterval(() => setTime(formatTime(new Date())), 1000);
     return () => clearInterval(interval);
   }, []);
 
   return (
     <header className="topbar">
-      {/* Left: hamburger on mobile, divider on desktop */}
       <div className="topbar-left">
         {isMobile ? (
           <button className="hamburger-btn" onClick={onMenuClick} aria-label="Abrir menu">
@@ -38,8 +28,15 @@ export default function TopBar({ isMobile, onMenuClick }) {
         )}
       </div>
 
-      {/* Right: time + status */}
       <div className="topbar-right">
+        <button
+          className="theme-toggle-btn"
+          onClick={toggleTheme}
+          title={theme === 'dark' ? 'Modo claro' : 'Modo escuro'}
+          aria-label={theme === 'dark' ? 'Mudar para modo claro' : 'Mudar para modo escuro'}
+        >
+          {theme === 'dark' ? <Sun size={15} strokeWidth={1.5} /> : <Moon size={15} strokeWidth={1.5} />}
+        </button>
         <div className="status-indicator">
           <span className="status-dot" />
           <span className="status-text">Live</span>
@@ -58,111 +55,56 @@ export default function TopBar({ isMobile, onMenuClick }) {
           height: 48px;
           background: var(--bg-secondary);
           border-bottom: 1px solid var(--border-subtle);
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 0 24px;
-          position: sticky;
-          top: 0;
-          z-index: 50;
+          display: flex; align-items: center; justify-content: space-between;
+          padding: 0 24px; position: sticky; top: 0; z-index: 50;
           backdrop-filter: blur(8px);
         }
-
-        .topbar-left {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-        }
-
+        .topbar-left { display: flex; align-items: center; gap: 12px; }
         .hamburger-btn {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          background: none;
-          border: 1px solid var(--border-subtle);
-          border-radius: 6px;
-          color: var(--text-secondary);
-          padding: 6px;
-          cursor: pointer;
-          transition: color 0.15s, border-color 0.15s;
+          display: flex; align-items: center; justify-content: center;
+          background: none; border: 1px solid var(--border-subtle);
+          border-radius: 6px; color: var(--text-secondary); padding: 6px;
+          cursor: pointer; transition: color 0.15s, border-color 0.15s;
         }
-        .hamburger-btn:hover {
-          color: var(--text-primary);
-          border-color: var(--border-default);
+        .hamburger-btn:hover { color: var(--text-primary); border-color: var(--border-default); }
+        .topbar-divider { width: 1px; height: 16px; background: var(--border-subtle); }
+        .topbar-right { display: flex; align-items: center; gap: 16px; }
+        .theme-toggle-btn {
+          display: flex; align-items: center; justify-content: center;
+          background: none; border: 1px solid var(--border-subtle);
+          border-radius: 6px; color: var(--text-muted); padding: 5px;
+          cursor: pointer; transition: color 0.2s, border-color 0.2s, background 0.2s;
         }
-
-        .topbar-divider {
-          width: 1px;
-          height: 16px;
-          background: var(--border-subtle);
+        .theme-toggle-btn:hover {
+          color: var(--brand-orange); border-color: var(--brand-orange);
+          background: rgba(247, 147, 26, 0.08);
         }
-
-        .topbar-right {
-          display: flex;
-          align-items: center;
-          gap: 16px;
-        }
-
-        .status-indicator {
-          display: flex;
-          align-items: center;
-          gap: 5px;
-        }
-
+        .status-indicator { display: flex; align-items: center; gap: 5px; }
         .status-dot {
-          width: 6px;
-          height: 6px;
-          background: #22c55e;
-          border-radius: 50%;
-          display: block;
+          width: 6px; height: 6px; background: #22c55e; border-radius: 50%;
           animation: pulseDot 2s ease-in-out infinite;
         }
-
         @keyframes pulseDot {
           0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); }
           50% { opacity: 0.8; box-shadow: 0 0 0 4px rgba(34, 197, 94, 0); }
         }
-
         .status-text {
-          font-family: var(--font-mono);
-          font-size: 10px;
-          color: #22c55e;
-          letter-spacing: 0.08em;
-          text-transform: uppercase;
+          font-family: var(--font-mono); font-size: 10px; color: #22c55e;
+          letter-spacing: 0.08em; text-transform: uppercase;
         }
-
         .topbar-time {
-          display: flex;
-          align-items: center;
-          gap: 5px;
-          font-family: var(--font-mono);
-          font-size: 11px;
-          color: var(--text-muted);
-          letter-spacing: 0.04em;
+          display: flex; align-items: center; gap: 5px;
+          font-family: var(--font-mono); font-size: 11px; color: var(--text-muted);
         }
-
         .topbar-badge {
-          font-family: var(--font-mono);
-          font-size: 10px;
-          color: var(--text-muted);
-          background: rgba(255, 255, 255, 0.03);
-          border: 1px solid var(--border-subtle);
-          padding: 3px 8px;
-          border-radius: 4px;
-          letter-spacing: 0.03em;
+          font-family: var(--font-mono); font-size: 10px; color: var(--text-muted);
+          background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-subtle);
+          padding: 3px 8px; border-radius: 4px;
         }
-
         @media (max-width: 768px) {
-          .topbar {
-            padding: 0 12px;
-            height: 44px;
-          }
-          .topbar-badge {
-            display: none;
-          }
-          .topbar-right {
-            gap: 10px;
-          }
+          .topbar { padding: 0 12px; height: 44px; }
+          .topbar-badge { display: none; }
+          .topbar-right { gap: 10px; }
         }
       `}</style>
     </header>
