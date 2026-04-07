@@ -1,4 +1,6 @@
 import { useRef, useState, useEffect, useMemo, useCallback } from 'react';
+import { useTheme } from '../ThemeContext';
+import { patchOption } from '../chartThemeHelper';
 
 const PERIODS = [
   { label: '1A', months: 12 },
@@ -43,6 +45,7 @@ function formatFlowBtc(v) {
 export default function ETFChart({ etfData, loading, error }) {
   const chartRef  = useRef(null);
   const chartInst = useRef(null);
+  const { isDark } = useTheme();
   const [isLog, setIsLog]               = useState(true);
   const [showByTicker, setShowByTicker]  = useState(false);
   const [showFlows, setShowFlows]        = useState(true);
@@ -399,7 +402,7 @@ export default function ETFChart({ etfData, loading, error }) {
         });
       }
       const option = buildOption(zoomRange);
-      if (option) chart.setOption(option, { notMerge: true });
+      if (option) chart.setOption(patchOption(option, isDark), { notMerge: true });
       setCurrentZoom(zoomRange);
     };
     init();
@@ -412,8 +415,8 @@ export default function ETFChart({ etfData, loading, error }) {
     if (!chart || !data.length) return;
     chart.resize();
     const option = buildOption(currentZoom);
-    if (option) chart.setOption(option, { notMerge: false, replaceMerge: ['series'] });
-  }, [isLog, showByTicker, showFlows, flowUnit, zoomRange, currentZoom, chartHeight, buildOption]);
+    if (option) chart.setOption(patchOption(option, isDark), { notMerge: false, replaceMerge: ['series'] });
+  }, [isLog, showByTicker, showFlows, flowUnit, zoomRange, currentZoom, chartHeight, buildOption, isDark]);
 
   const latest = data[data.length - 1];
 
