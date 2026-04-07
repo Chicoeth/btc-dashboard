@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useTheme } from '../ThemeContext';
+import { patchOption } from '../chartThemeHelper';
 
 /* ─── constants ─── */
 const PERIODS = [
@@ -123,6 +125,7 @@ function buildSthAreaSeries(data) {
 export default function STHMVRVChart({ sthMvrvData, loading, error }) {
   const chartRef  = useRef(null);
   const chartInst = useRef(null);
+  const { isDark } = useTheme();
   const [isLog, setIsLog]               = useState(true);
   const [coloredPrice, setColoredPrice] = useState(true);
   const [coloredMvrv,  setColoredMvrv]  = useState(false);
@@ -483,7 +486,7 @@ export default function STHMVRVChart({ sthMvrvData, loading, error }) {
         });
       }
       const option = buildOption(zoomRange);
-      if (option) chart.setOption(option, { notMerge: true });
+      if (option) chart.setOption(patchOption(option, isDark), { notMerge: true });
       setCurrentZoom(zoomRange);
     };
     init();
@@ -495,8 +498,8 @@ export default function STHMVRVChart({ sthMvrvData, loading, error }) {
     const chart = chartInst.current;
     if (!chart || !data.length) return;
     const option = buildOption(currentZoom);
-    if (option) chart.setOption(option, { notMerge: false, replaceMerge: ['series'] });
-  }, [isLog, coloredPrice, coloredMvrv, showBands, zoomRange, currentZoom, buildOption]);
+    if (option) chart.setOption(patchOption(option, isDark), { notMerge: false, replaceMerge: ['series'] });
+  }, [isLog, coloredPrice, coloredMvrv, showBands, zoomRange, currentZoom, buildOption, isDark]);
 
   const latest      = data[data.length - 1];
   const latestColor = latest ? sthMvrvColor(latest[3]) : '#9090b0';
