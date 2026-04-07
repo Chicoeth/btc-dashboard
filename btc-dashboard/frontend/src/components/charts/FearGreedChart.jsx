@@ -1,4 +1,6 @@
 import { useEffect, useRef, useMemo, useState, useCallback } from 'react';
+import { useTheme } from '../ThemeContext';
+import { patchOption } from '../chartThemeHelper';
 
 function fngColor(value, alpha = 1) {
   const v = Math.max(0, Math.min(100, value));
@@ -75,6 +77,7 @@ function buildColoredSeries(merged) {
 export default function FearGreedChart({ priceData, fngData, loading, error }) {
   const chartRef    = useRef(null);
   const chartInst   = useRef(null);
+  const { isDark } = useTheme();
   const [isLog, setIsLog]               = useState(true);
   const [colored, setColored]           = useState(true);
   const [activePeriod, setActivePeriod] = useState('Todo');
@@ -342,7 +345,7 @@ export default function FearGreedChart({ priceData, fngData, loading, error }) {
         });
       }
       const option = buildOption(zoomRange);
-      if (option) chart.setOption(option, { notMerge: true });
+      if (option) chart.setOption(patchOption(option, isDark), { notMerge: true });
       setCurrentZoom(zoomRange);
     };
     init();
@@ -354,7 +357,7 @@ export default function FearGreedChart({ priceData, fngData, loading, error }) {
     const chart = chartInst.current;
     if (!chart || !merged.length) return;
     const option = buildOption(currentZoom);
-    if (option) chart.setOption(option, { notMerge: false, replaceMerge: ['series'] });
+    if (option) chart.setOption(patchOption(option, isDark), { notMerge: false, replaceMerge: ['series'] });
   }, [isLog, colored, zoomRange, coloredSeries, currentZoom]);
 
   const latest      = merged[merged.length - 1];
