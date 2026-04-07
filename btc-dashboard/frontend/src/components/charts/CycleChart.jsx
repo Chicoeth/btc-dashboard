@@ -267,16 +267,19 @@ export default function CycleChart({ priceData, loading, error }) {
       });
 
       if (showStd && upper.length && lower.length) {
-        // Técnica de masking: upper preenche para baixo com cor transparente,
-        // lower preenche para baixo com a cor de fundo (apaga a parte abaixo)
+        // Cor de masking deve ser igual ao fundo real do card
+        const maskColor = isDark ? '#111120' : '#ffffff';
+        const bandLine  = isDark ? 'rgba(232,232,240,0.3)' : 'rgba(100,100,160,0.4)';
+        const bandFill  = isDark ? 'rgba(232,232,240,0.1)' : 'rgba(100,100,160,0.15)';
+
         extraSeries.push({
           type: 'line',
           name: '__std_upper__',
           color: 'transparent',
           data: upper.map(([d, v]) => [d, v]),
           smooth: false, symbol: 'none',
-          lineStyle: { color: 'rgba(232,232,240,0.3)', width: 1 },
-          areaStyle: { color: 'rgba(232,232,240,0.1)', origin: 'auto' },
+          lineStyle: { color: bandLine, width: 1 },
+          areaStyle: { color: bandFill, origin: 'auto' },
           itemStyle: { color: 'transparent' },
           z: 1, silent: true, emphasis: { disabled: true }, legendHoverLink: false,
         });
@@ -286,13 +289,12 @@ export default function CycleChart({ priceData, loading, error }) {
           color: 'transparent',
           data: lower.map(([d, v]) => [d, v]),
           smooth: false, symbol: 'none',
-          lineStyle: { color: 'rgba(232,232,240,0.3)', width: 1 },
-          areaStyle: { color: BG_COLOR, origin: 'auto' },
+          lineStyle: { color: bandLine, width: 1 },
+          areaStyle: { color: maskColor, origin: 'auto' },
           itemStyle: { color: 'transparent' },
           z: 2, silent: true, emphasis: { disabled: true }, legendHoverLink: false,
         });
       }
-    }
 
     return {
       backgroundColor: 'transparent',
