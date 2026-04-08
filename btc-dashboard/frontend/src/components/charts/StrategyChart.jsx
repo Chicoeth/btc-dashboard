@@ -525,7 +525,10 @@ export default function StrategyChart({ strategyData, priceData, loading, error 
       </div>
 
       <div className="chart-footer">
-        <span>{data.length} registros · {data.length ? `${data[0].date} → ${data[data.length-1].date}` : ''}</span>
+        <span>{data.length} registros</span>
+        <span>·</span>
+        <span>{data.length ? `${data[0].date} → ${data[data.length-1].date}` : ''}</span>
+        <span>·</span>
         <span>Fonte: Strategy (MSTR) · bitcointreasuries.net</span>
       </div>
 
@@ -587,9 +590,9 @@ export default function StrategyChart({ strategyData, priceData, loading, error 
         }
         @keyframes spin { to { transform:rotate(360deg); } }
         .chart-footer {
-          display:flex; justify-content:space-between; padding:6px 16px;
-          font-family:var(--font-mono); font-size:8px; color:#28283c;
-          border-top:1px solid var(--border-subtle);
+          display:flex; align-items:center; justify-content:flex-end;
+          gap:8px; padding:8px 20px; font-family:var(--font-mono);
+          font-size:9px; color:var(--text-muted); flex-wrap:wrap;
         }
       `}</style>
     </div>
