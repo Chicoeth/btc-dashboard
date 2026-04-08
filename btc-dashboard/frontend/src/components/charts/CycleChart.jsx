@@ -570,9 +570,9 @@ export default function CycleChart({ priceData, loading, error }) {
         @keyframes spin { to { transform: rotate(360deg); } }
 
         .chart-footer {
-          display: flex; align-items: center; gap: 8px; padding: 5px 20px;
-          border-top: 1px solid rgba(30,30,53,0.5); font-family: var(--font-mono);
-          font-size: 8px; color: #28283c; flex-wrap: wrap;
+          display:flex; align-items:center; justify-content:flex-end;
+          gap:8px; padding:8px 20px; font-family:var(--font-mono);
+          font-size:9px; color:var(--text-muted); flex-wrap:wrap;
         }
       `}</style>
     </div>
