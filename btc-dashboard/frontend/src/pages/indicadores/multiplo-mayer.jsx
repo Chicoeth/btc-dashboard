@@ -149,7 +149,6 @@ export default function MayerPage() {
         .zone-row div p { font-size: 12px; color: var(--text-muted); margin: 3px 0 0; line-height: 1.5; }
         .zone-row strong { font-size: 13px; }
       `}</style>
-      </div>
     </Layout>
   );
 }
