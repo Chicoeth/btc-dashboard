@@ -44,19 +44,21 @@ export default function Sidebar({ collapsed, onToggle, isMobile, mobileOpen, onM
 
       <aside className={sidebarClass}>
         <div className="logo">
-          <img
-            src="/paradigma-effigy.png"
-            alt="Paradigma"
-            className="logo-effigy"
-            width={44}
-            height={44}
-          />
-          {(!collapsed || isMobile) && (
-            <div className="logo-text">
-              <span className="logo-title">Paradigma</span>
-              <span className="logo-subtitle">Dashboard</span>
-            </div>
-          )}
+          <Link href="/" className="logo-link">
+            <img
+              src="/paradigma-effigy.png"
+              alt="Paradigma"
+              className="logo-effigy"
+              width={44}
+              height={44}
+            />
+            {(!collapsed || isMobile) && (
+              <div className="logo-text">
+                <span className="logo-title">Paradigma</span>
+                <span className="logo-subtitle">Dashboard</span>
+              </div>
+            )}
+          </Link>
           {/* Close button on mobile */}
           {isMobile && (
             <button className="mobile-close" onClick={onMobileClose} aria-label="Fechar menu">
@@ -94,12 +96,6 @@ export default function Sidebar({ collapsed, onToggle, isMobile, mobileOpen, onM
               : <PanelLeftClose size={16} strokeWidth={1.5} />
             }
           </button>
-        )}
-
-        {(!collapsed || isMobile) && (
-          <div className="sidebar-footer">
-            <span>Dados atualizados diariamente</span>
-          </div>
         )}
 
         <style jsx>{`
@@ -143,6 +139,10 @@ export default function Sidebar({ collapsed, onToggle, isMobile, mobileOpen, onM
           }
           .sidebar--collapsed .logo {
             justify-content:center; padding:20px 0 18px;
+          }
+          .logo-link {
+            display:flex; align-items:center; gap:10px;
+            text-decoration:none; cursor:pointer;
           }
           .logo-effigy {
             width:44px; height:44px; flex-shrink:0;
@@ -212,10 +212,6 @@ export default function Sidebar({ collapsed, onToggle, isMobile, mobileOpen, onM
             background:rgba(255,255,255,0.03);
           }
 
-          .sidebar-footer {
-            padding:12px 16px; border-top:1px solid var(--border-subtle);
-            font-family:var(--font-mono); font-size:9px; color:var(--text-muted); letter-spacing:0.03em;
-          }
 
           /* ─── Mobile drawer ─── */
           @media (max-width: 768px) {
