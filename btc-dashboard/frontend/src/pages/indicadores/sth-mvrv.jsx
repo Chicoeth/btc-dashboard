@@ -33,67 +33,50 @@ export default function STHMVRVPage() {
         </div>
 
         <div className="page-card">
-        <STHMVRVChart sthMvrvData={sthData} loading={loading} error={error} />
-      </div>
-      <div className="info-panel">
-        <div className="info-section">
-          <h3>O que é o STH MVRV?</h3>
-          <p>
-            O <strong>STH MVRV</strong> (Short-Term Holder Market Value to Realized Value) compara o preço
-            de mercado do Bitcoin com o <em>preço realizado dos detentores de curto prazo</em> — ou seja,
-            o custo médio de aquisição das moedas movidas nos últimos 155 dias.
-          </p>
-          <p>
-            Enquanto o MVRV tradicional mede todos os detentores, o STH MVRV foca nos participantes mais
-            recentes do mercado — os que compraram nas últimas semanas e meses.
-          </p>
+          <STHMVRVChart sthMvrvData={sthData} loading={loading} error={error} />
         </div>
-        <div className="info-section">
-          <h3>Como interpretar</h3>
-          <div className="zone-rows">
-            <div className="zone-row">
-              <span className="dot" style={{background:'#e8000a'}} />
-              <div>
-                <strong style={{color:'#e8000a'}}>STH MVRV {'>'} 2.0</strong>
-                <p>Detentores recentes com lucro extremo. Historicamente precede topos locais e correções.</p>
-              </div>
-            </div>
-            <div className="zone-row">
-              <span className="dot" style={{background:'#f5c400'}} />
-              <div>
-                <strong style={{color:'#f5c400'}}>STH MVRV 1.0 – 2.0</strong>
-                <p>Lucro moderado. Mercado saudável com pressão de venda controlável.</p>
-              </div>
-            </div>
-            <div className="zone-row">
-              <span className="dot" style={{background:'#80c440'}} />
-              <div>
-                <strong style={{color:'#80c440'}}>STH MVRV 0.8 – 1.0</strong>
-                <p>Detentores recentes perto do custo ou com leve prejuízo. Zona de possível acumulação.</p>
-              </div>
-            </div>
-            <div className="zone-row">
-              <span className="dot" style={{background:'#00c44f'}} />
-              <div>
-                <strong style={{color:'#00c44f'}}>STH MVRV {'<'} 0.8</strong>
-                <p>Capitulação dos compradores recentes. Oportunidade histórica de compra — fundos de ciclo.</p>
-              </div>
-            </div>
+
+        <div className="info-panel">
+          <div className="info-section">
+            <h3>O que é</h3>
+            <p>
+              <strong>O STH MVRV (Short-Term Holder Market Value to Realized Value) é uma medida do
+              lucro ou prejuízo não realizado dos detentores de curto prazo do BTC.</strong>
+            </p>
+            <p>
+              É bem similar ao MVRV, mas ele compara o preço de mercado do Bitcoin com o "Preço Realizado
+              dos Detentores de Curto Prazo" — que só considera as moedas movidas nos últimos 155 dias,
+              fazendo um "custo médio global" dos detentores de curto prazo.
+            </p>
+            <p>
+              Enquanto o MVRV tradicional aponta o lucro/prejuízo de todos os detentores de BTC, o STH
+              MVRV foca nos participantes mais recentes do mercado — aqueles que compraram nas últimas
+              semanas e meses.
+            </p>
+          </div>
+          <div className="info-section">
+            <h3>Como interpretar</h3>
+            <p>
+              Momentos que detentores de curto prazo estão com altos lucros podem indicar proximidade de
+              um topo (muitas vezes local), enquanto momentos de altos prejuízos podem indicar proximidade
+              de um fundo (muitas vezes local).
+            </p>
+            <p>
+              Como o STH MVRV trabalha com detentores de curto prazo, ele é mais sensível e costuma
+              responder mais rápido a mudanças no mercado. Sendo então às vezes melhor para encontrar
+              topos e fundos locais, em vez de topos e fundos de ciclos (onde o MVRV "normal" costuma
+              ser melhor).
+            </p>
+            <p>
+              Durante bull markets, existe uma tendência que o preço do BTC encontre suporte no "Preço
+              Realizado dos Detentores de Curto Prazo". Durante bear markets, muitas vezes esse preço
+              realizado se torna resistência.
+            </p>
+            <p>
+              Utilizar a banda de ± 1 desvio padrão também pode ser útil para buscar topos e fundos locais.
+            </p>
           </div>
         </div>
-        <div className="info-section">
-          <h3>Diferença para o MVRV geral</h3>
-          <p>
-            O MVRV geral inclui moedas que não se movem há anos (detentores de longo prazo),
-            diluindo o sinal. O STH MVRV é mais sensível e reage mais rápido às mudanças de sentimento,
-            sendo especialmente útil para identificar topos e fundos locais dentro de um ciclo.
-          </p>
-          <p>
-            Quando o STH MVRV cruza abaixo de 1.0, significa que os compradores recentes estão no prejuízo
-            — momento em que historicamente o "dinheiro inteligente" começa a acumular.
-          </p>
-        </div>
-      </div>
 
       </div>
 
@@ -124,28 +107,28 @@ export default function STHMVRVPage() {
         .page-card {
           background: var(--bg-card);
           border: 1px solid var(--border-subtle);
-          border-radius: 8px;
+          border-radius: 12px;
           overflow: hidden;
         }
         .info-panel {
           display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-          gap: 12px;
-          margin-top: 16px;
+          grid-template-columns: 1fr 1fr;
+          gap: 16px;
         }
+        @media (max-width: 900px) { .info-panel { grid-template-columns: 1fr; } }
         .info-section {
           background: var(--bg-card);
           border: 1px solid var(--border-subtle);
-          border-radius: 8px;
-          padding: 20px;
+          border-radius: 12px;
+          padding: 20px 24px;
         }
         .info-section h3 {
           font-family: var(--font-display);
-          font-size: 14px;
-          font-weight: 700;
+          font-size: 13px;
+          font-weight: 600;
           color: var(--text-secondary);
           text-transform: uppercase;
-          letter-spacing: 0.04em;
+          letter-spacing: 0.08em;
           margin: 0 0 12px;
         }
         .info-section p {
@@ -155,15 +138,6 @@ export default function STHMVRVPage() {
           margin: 0 0 8px;
         }
         .info-section strong { color: var(--text-secondary); }
-        .info-section em { color: var(--text-secondary); font-style: normal; }
-        .zone-rows { display: flex; flex-direction: column; gap: 12px; }
-        .zone-row { display: flex; gap: 10px; align-items: flex-start; }
-        .dot {
-          width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; margin-top: 3px;
-        }
-        .zone-row p {
-          font-size: 12px; color: var(--text-muted); line-height: 1.6; margin: 2px 0 0;
-        }
       `}</style>
     </Layout>
   );
