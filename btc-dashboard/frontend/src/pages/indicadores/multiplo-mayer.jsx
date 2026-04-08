@@ -33,54 +33,41 @@ export default function MayerPage() {
         </div>
 
         <div className="page-card">
-        <MayerChart priceData={priceData} loading={loading} error={error} />
-      </div>
-      <div className="info-panel">
-        <div className="info-section">
-          <h3>O que é o Múltiplo de Mayer?</h3>
-          <p>
-            Criado por Trace Mayer, o <strong>Múltiplo de Mayer</strong> é simplesmente o preço
-            atual do Bitcoin dividido pela sua <em>média móvel de 200 dias</em> (SMA 200).
-          </p>
-          <p>
-            É uma forma rápida de avaliar se o preço está "esticado" demais acima da tendência
-            de longo prazo — ou se está descontado em relação a ela.
-          </p>
+          <MayerChart priceData={priceData} loading={loading} error={error} />
         </div>
-        <div className="info-section">
-          <h3>Como interpretar</h3>
-          <div className="zone-rows">
-            <div className="zone-row">
-              <span className="dot" style={{ background: '#e8000a' }} />
-              <div>
-                <strong style={{ color: '#e8000a' }}>Mayer {'>'} 2.4</strong>
-                <p>Sobrecompra extrema. Historicamente, apenas ~5% dos dias ficaram acima deste nível — zona de euforia.</p>
-              </div>
-            </div>
-            <div className="zone-row">
-              <span className="dot" style={{ background: '#f5a000' }} />
-              <div>
-                <strong style={{ color: '#f5a000' }}>Mayer 1.5 – 2.4</strong>
-                <p>Preço bem acima da média. O mercado está aquecido — atenção redobrada para sinais de reversão.</p>
-              </div>
-            </div>
-            <div className="zone-row">
-              <span className="dot" style={{ background: '#8cb400' }} />
-              <div>
-                <strong style={{ color: '#8cb400' }}>Mayer 1.0 – 1.5</strong>
-                <p>Zona neutra a moderadamente otimista. Preço próximo ou acima da tendência — mercado saudável.</p>
-              </div>
-            </div>
-            <div className="zone-row">
-              <span className="dot" style={{ background: '#00c44f' }} />
-              <div>
-                <strong style={{ color: '#00c44f' }}>Mayer {'<'} 1.0</strong>
-                <p>Preço abaixo da SMA 200 — historicamente, zonas de acumulação. Quanto mais baixo, maior o desconto.</p>
-              </div>
-            </div>
+
+        <div className="info-panel">
+          <div className="info-section">
+            <h3>O que é</h3>
+            <p>
+              O Múltiplo de Mayer é simplesmente o preço atual do Bitcoin dividido pela sua média móvel
+              de 200 dias (200DMA) — que é amplamente utilizada para tentar diferenciar fases de alta
+              e de baixa.
+            </p>
+            <p>
+              <strong>É uma forma rápida de avaliar se o preço está "esticado" demais em relação à
+              tendência de longo prazo</strong> — apontando sobrevalorização ou subvalorização.
+            </p>
+          </div>
+          <div className="info-section">
+            <h3>Como interpretar</h3>
+            <p>
+              Valores altos do Múltiplo de Mayer indicam que o preço está se esticando demais acima de
+              sua média de longo prazo, sugerindo supervalorização. Valores baixos (menores que 1) também
+              indicam que o preço está se esticando demais, mas dessa vez abaixo da média — indicando
+              subvalorização.
+            </p>
+            <p>
+              É importante se atentar que o Múltiplo de Mayer costuma ficar acima de 1 durante boa parte
+              de seus ciclos de alta; e abaixo de 1 durante boa parte do seu ciclo de baixa.
+            </p>
+            <p>
+              Então, por exemplo, o Múltiplo de Mayer pode já ir abaixo de 1 durante o início de uma
+              tendência de baixa, onde o preço ainda vai cair por mais um tempo considerável. Assim como
+              pode já estar acima de 1, mas ser apenas o início da fase de alta.
+            </p>
           </div>
         </div>
-      </div>
 
       </div>
 
@@ -113,7 +100,6 @@ export default function MayerPage() {
           border: 1px solid var(--border-subtle);
           border-radius: 12px;
           overflow: hidden;
-          margin-bottom: 20px;
         }
         .info-panel {
           display: grid;
@@ -143,11 +129,6 @@ export default function MayerPage() {
           margin: 0 0 8px;
         }
         .info-section strong { color: var(--text-secondary); }
-        .zone-rows { display: flex; flex-direction: column; gap: 14px; }
-        .zone-row { display: flex; gap: 12px; align-items: flex-start; }
-        .zone-row .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; margin-top: 3px; }
-        .zone-row div p { font-size: 12px; color: var(--text-muted); margin: 3px 0 0; line-height: 1.5; }
-        .zone-row strong { font-size: 13px; }
       `}</style>
     </Layout>
   );
