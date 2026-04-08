@@ -64,14 +64,16 @@ export default function PriceChart({ data, loading, error }) {
     return { start: startPct, end: 100 };
   }, [data, activePeriod]);
 
-  const chartOption = useMemo(() => {
+  /* ─── buildOption (useCallback!) ─── */
+  const buildOption = useCallback((zoom) => {
     if (!data || data.length === 0) return null;
+    const z = zoom || zoomRange;
 
     const timestamps = data.map(([ts]) => new Date(ts).toISOString().split('T')[0]);
     const closes     = data.map(([, c]) => c);
 
     // Quantos dias visíveis no zoom atual
-    const spanDays = Math.round(((zoomRange.end - zoomRange.start) / 100) * timestamps.length);
+    const spanDays = Math.round(((z.end - z.start) / 100) * timestamps.length);
 
     // Formatter do eixo X adaptativo
     const xLabelFormatter = (val) => {
@@ -81,18 +83,14 @@ export default function PriceChart({ data, loading, error }) {
       const day   = d.getDate();
 
       if (spanDays > 365 * 3) {
-        // Visão longa (>3 anos): só ano, apenas em janeiro
         return month === 0 ? String(year) : '';
       } else if (spanDays > 180) {
-        // Visão média (6m–3a): ano em jan, mês a cada trimestre
         if (month === 0)      return String(year);
         if (month % 3 === 0)  return MONTHS_PT[month];
         return '';
       } else if (spanDays > 60) {
-        // Visão mensal (2–6m): todos os meses
         return month === 0 ? String(year) : MONTHS_PT[month];
       } else {
-        // Visão curta (<2m): dias + mês
         if (day === 1) return MONTHS_PT[month] + (month === 0 ? '\n' + year : '');
         if ([8, 15, 22].includes(day)) return String(day);
         return '';
@@ -122,9 +120,8 @@ export default function PriceChart({ data, loading, error }) {
       }));
 
     // Bounds para escala log baseados nos dados visíveis
-    const activeZoom = currentZoom;
-    const i0v = Math.floor((activeZoom.start / 100) * (data.length - 1));
-    const i1v = Math.ceil((activeZoom.end   / 100) * (data.length - 1));
+    const i0v = Math.floor((z.start / 100) * (data.length - 1));
+    const i1v = Math.ceil((z.end   / 100) * (data.length - 1));
     const visiblePrices = data.slice(i0v, i1v + 1).map(d => d[1]).filter(v => v > 0);
     const logBounds = isLog && visiblePrices.length ? {
       min: Math.pow(10, Math.log10(Math.min(...visiblePrices)) - 0.1),
@@ -140,9 +137,7 @@ export default function PriceChart({ data, loading, error }) {
         trigger: 'axis',
         axisPointer: {
           type: 'line',
-          // Só linha horizontal (snap ao valor), sem linha vertical
           lineStyle: { color: 'rgba(255,255,255,0.15)', width: 1, type: 'dashed' },
-          // Desabilita o label do eixo Y (o número flutuante à esquerda)
           label: { show: false },
         },
         backgroundColor: '#111120',
@@ -207,8 +202,8 @@ export default function PriceChart({ data, loading, error }) {
           xAxisIndex: 0,
           bottom: 10,
           height: 44,
-          start: zoomRange.start,
-          end: zoomRange.end,
+          start: z.start,
+          end: z.end,
           borderColor: '#1e1e35',
           backgroundColor: 'rgba(10,10,15,0.6)',
           fillerColor: 'rgba(247,147,26,0.08)',
@@ -228,8 +223,8 @@ export default function PriceChart({ data, loading, error }) {
         {
           type: 'inside',
           xAxisIndex: 0,
-          start: zoomRange.start,
-          end: zoomRange.end,
+          start: z.start,
+          end: z.end,
         },
       ],
 
@@ -255,13 +250,9 @@ export default function PriceChart({ data, loading, error }) {
         } : undefined,
       }],
     };
-  }, [data, isLog, zoomRange, currentZoom]);
+  }, [data, isLog, zoomRange]);
 
-  // Init / update chart
-  // Wrap option building in a ref-stable function for zoom handler
-  const buildOptionRef = useRef(null);
-  buildOptionRef.current = chartOption;
-
+  // ── Init ──
   useEffect(() => {
     if (!echartsReady || !chartRef.current || !data?.length) return;
     const init = async () => {
@@ -272,27 +263,43 @@ export default function PriceChart({ data, loading, error }) {
         chartInst.current = chart;
         new ResizeObserver(() => chart.resize()).observe(chartRef.current);
 
-        // Listen to zoom — update log bounds without full re-render
+        // Debounced zoom handler — updates Y bounds without resetting slider position
+        let zoomTimer = null;
         chart.on('datazoom', () => {
-          const opt = chart.getOption();
-          const dz  = opt?.dataZoom?.[0];
-          if (!dz) return;
-          const start = dz.start ?? 0;
-          const end   = dz.end   ?? 100;
-          setCurrentZoom({ start, end });
+          clearTimeout(zoomTimer);
+          zoomTimer = setTimeout(() => {
+            const opt = chart.getOption();
+            const dz  = opt?.dataZoom?.[0];
+            if (!dz) return;
+            const start = dz.start ?? 0;
+            const end   = dz.end   ?? 100;
+            setCurrentZoom({ start, end });
+          }, 150);
         });
       }
-      if (chartOption) chart.setOption(patchOption(chartOption, isDark), { notMerge: true });
+      const option = buildOption();
+      if (option) chart.setOption(patchOption(option, isDark), { notMerge: true });
     };
     init();
   }, [echartsReady, data?.length]);
 
-  // Re-apply option when it changes (settings, zoom, log/linear)
+  // ── Update (period, log/linear, theme) ──
   useEffect(() => {
     const chart = chartInst.current;
-    if (!chart || !chartOption) return;
-    chart.setOption(patchOption(chartOption, isDark), { notMerge: false });
-  }, [chartOption, isDark]);
+    if (!chart) return;
+    const option = buildOption();
+    if (option) chart.setOption(patchOption(option, isDark), { notMerge: true });
+  }, [buildOption, isDark]);
+
+  // ── Zoom-only Y-axis update (no slider reset) ──
+  useEffect(() => {
+    const chart = chartInst.current;
+    if (!chart || !data?.length) return;
+    const option = buildOption(currentZoom);
+    if (!option) return;
+    // Only update yAxis — do NOT touch dataZoom to avoid snap-back
+    chart.setOption(patchOption({ yAxis: option.yAxis }, isDark), { notMerge: false, replaceMerge: [] });
+  }, [currentZoom, isDark]);
 
   // Stats — ATH usa high (índice 2), com fallback para close
   const stats = useMemo(() => {
