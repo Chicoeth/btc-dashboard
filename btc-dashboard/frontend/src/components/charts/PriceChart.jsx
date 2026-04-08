@@ -36,7 +36,7 @@ function formatPriceFull(value) {
 
 function formatDateTooltip(dateStr) {
   const d = new Date(dateStr);
-  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
+  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' });
 }
 
 export default function PriceChart({ data, loading, error }) {
@@ -134,7 +134,7 @@ export default function PriceChart({ data, loading, error }) {
     return {
       backgroundColor: 'transparent',
       animation: false,
-      grid: { top: 20, left: 68, right: 24, bottom: 80 },
+      grid: { top: 20, left: 72, right: 24, bottom: 80 },
 
       tooltip: {
         trigger: 'axis',
@@ -188,6 +188,8 @@ export default function PriceChart({ data, loading, error }) {
         type: isLog ? 'log' : 'value',
         logBase: 10,
         ...(isLog ? logBounds : { scale: true }),
+        name: 'Preço (USD)', nameLocation: 'middle', nameGap: 56,
+        nameTextStyle: { color: '#5a5a80', fontFamily: 'JetBrains Mono, monospace', fontSize: 11 },
         axisLine: { show: false },
         axisTick: { show: false },
         axisLabel: {
@@ -253,7 +255,7 @@ export default function PriceChart({ data, loading, error }) {
         } : undefined,
       }],
     };
-  }, [data, isLog, zoomRange]);
+  }, [data, isLog, zoomRange, currentZoom]);
 
   // Init / update chart
   // Wrap option building in a ref-stable function for zoom handler
@@ -299,12 +301,9 @@ export default function PriceChart({ data, loading, error }) {
     const prev     = data[data.length - 2]?.[1];
     const change24 = prev ? ((latest - prev) / prev) * 100 : null;
 
-    let ath = 0, athIdx = 0;
-    for (let i = 0; i < data.length; i++) {
-      const h = data[i][2] ?? data[i][1];
-      if (h > ath) { ath = h; athIdx = i; }
-    }
-    const athDate  = new Date(data[athIdx][0]).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
+    // ATH fixo — valor intraday confirmado, não depende do JSON de fechamento
+    const ath      = 126219;
+    const athDate  = new Date('2025-10-06T00:00:00Z').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' });
     const fromAth  = ((latest - ath) / ath) * 100;
 
     const oneYearAgo = Date.now() - 365 * 24 * 60 * 60 * 1000;
