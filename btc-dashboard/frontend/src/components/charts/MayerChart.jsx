@@ -573,9 +573,9 @@ export default function MayerChart({ priceData, loading, error }) {
         }
 
         .chart-footer {
-          display:flex; align-items:center; gap:8px;
-          padding:8px 20px; font-family:var(--font-mono);
-          font-size:8px; color:#28283c;
+          display:flex; align-items:center; justify-content:flex-end;
+          gap:8px; padding:8px 20px; font-family:var(--font-mono);
+          font-size:9px; color:var(--text-muted); flex-wrap:wrap;
         }
       `}</style>
     </div>
