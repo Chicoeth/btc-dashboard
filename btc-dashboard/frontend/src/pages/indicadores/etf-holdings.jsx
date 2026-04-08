@@ -33,55 +33,27 @@ export default function ETFPage() {
         </div>
 
         <div className="page-card">
-        <ETFChart
-          etfData={etfData}
-          loading={loading}
-          error={error}
-        />
-      </div>
-      <div className="info-panel">
-        <div className="info-section">
-          <h3>O que é este gráfico?</h3>
-          <p>
-            Mostra os holdings combinados dos <strong>11 ETFs Spot de Bitcoin</strong> listados nos EUA,
-            aprovados pela SEC em janeiro de 2024. Juntos, eles detêm mais de 1.3 milhão de BTC (~6% de todo o supply).
-          </p>
-          <p>
-            A <strong>linha laranja</strong> é o preço de mercado do Bitcoin. As <strong>barras</strong> mostram
-            a quantidade total de BTC sob custódia dos ETFs.
-          </p>
+          <ETFChart
+            etfData={etfData}
+            loading={loading}
+            error={error}
+          />
         </div>
-        <div className="info-section">
-          <h3>ETFs incluídos</h3>
-          <div className="zone-rows">
-            <div className="zone-row">
-              <span className="dot" style={{background:'#f7931a'}} />
-              <div>
-                <strong style={{color:'#f7931a'}}>IBIT (BlackRock)</strong>
-                <p>O maior ETF de Bitcoin do mundo, com ~60% de todo o mercado de ETFs spot.</p>
-              </div>
-            </div>
-            <div className="zone-row">
-              <span className="dot" style={{background:'#3b82f6'}} />
-              <div>
-                <strong style={{color:'#3b82f6'}}>FBTC (Fidelity)</strong>
-                <p>Segundo maior, com custódia própria via Fidelity Digital Assets.</p>
-              </div>
-            </div>
-            <div className="zone-row">
-              <span className="dot" style={{background:'#6366f1'}} />
-              <div>
-                <strong style={{color:'#6366f1'}}>GBTC (Grayscale)</strong>
-                <p>Convertido de trust para ETF em jan/2024. Ainda detém holdings significativos.</p>
-              </div>
-            </div>
+
+        <div className="info-panel">
+          <div className="info-section">
+            <h3>O que é</h3>
+            <p>
+              <strong>Esse gráfico mostra os holdings combinados dos ETFs de BTC</strong> listados
+              nos EUA.
+            </p>
+            <p>
+              A linha laranja é o preço de mercado do Bitcoin. As barras verdes e vermelhas mostram
+              a entrada/saída semanal de capital dos ETFs (tanto em BTC quanto em USD), e as barras
+              laranjas mostram a quantidade total de BTC sob custódia dos ETFs.
+            </p>
           </div>
-          <p style={{marginTop: '8px', color: '#5a5a80', fontSize: '12px'}}>
-            Outros: BITB (Bitwise), ARKB (ARK/21Shares), HODL (VanEck), BTCO (Invesco),
-            EZBC (Franklin), BRRR (CoinShares), BTCW (WisdomTree), BTC (Grayscale Mini).
-          </p>
         </div>
-      </div>
 
       </div>
 
@@ -114,14 +86,12 @@ export default function ETFPage() {
           border: 1px solid var(--border-subtle);
           border-radius: 12px;
           overflow: hidden;
-          margin-bottom: 20px;
         }
         .info-panel {
           display: grid;
-          grid-template-columns: 1fr 1fr;
+          grid-template-columns: 1fr;
           gap: 16px;
         }
-        @media (max-width: 900px) { .info-panel { grid-template-columns: 1fr; } }
         .info-section {
           background: var(--bg-card);
           border: 1px solid var(--border-subtle);
@@ -144,11 +114,6 @@ export default function ETFPage() {
           margin: 0 0 8px;
         }
         .info-section strong { color: var(--text-secondary); }
-        .zone-rows { display: flex; flex-direction: column; gap: 14px; }
-        .zone-row { display: flex; gap: 12px; align-items: flex-start; }
-        .zone-row .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; margin-top: 3px; }
-        .zone-row div p { font-size: 12px; color: var(--text-muted); margin: 3px 0 0; line-height: 1.5; }
-        .zone-row strong { font-size: 13px; }
       `}</style>
     </Layout>
   );
