@@ -165,7 +165,6 @@ export default function STHMVRVPage() {
           font-size: 12px; color: var(--text-muted); line-height: 1.6; margin: 2px 0 0;
         }
       `}</style>
-      </div>
     </Layout>
   );
 }
