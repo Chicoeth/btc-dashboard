@@ -33,54 +33,63 @@ export default function MVRVPage() {
         </div>
 
         <div className="page-card">
-        <MVRVChart mvrvData={mvrvData} loading={loading} error={error} />
-      </div>
-      <div className="info-panel">
-        <div className="info-section">
-          <h3>O que é o MVRV?</h3>
-          <p>
-            O <strong>MVRV</strong> (Market Value to Realized Value) compara o preço de mercado do Bitcoin
-            com o seu <em>preço realizado</em> — a média ponderada do preço pago por cada moeda na última
-            vez que foi movida na blockchain.
-          </p>
-          <p>
-            Em essência, mede se os detentores de Bitcoin estão, em média, no lucro ou no prejuízo.
-          </p>
+          <MVRVChart mvrvData={mvrvData} loading={loading} error={error} />
         </div>
-        <div className="info-section">
-          <h3>Como interpretar</h3>
-          <div className="zone-rows">
-            <div className="zone-row">
-              <span className="dot" style={{background:'#e8000a'}} />
-              <div>
-                <strong style={{color:'#e8000a'}}>MVRV {'>'} 3.5</strong>
-                <p>Mercado fortemente sobrevalorizado. Historicamente próximo de topos de ciclo — alta probabilidade de correção.</p>
-              </div>
-            </div>
-            <div className="zone-row">
-              <span className="dot" style={{background:'#f5c400'}} />
-              <div>
-                <strong style={{color:'#f5c400'}}>MVRV 2.5 – 3.5</strong>
-                <p>Zona de atenção. Lucros elevados podem incentivar vendas e pressão baixista.</p>
-              </div>
-            </div>
-            <div className="zone-row">
-              <span className="dot" style={{background:'#80c440'}} />
-              <div>
-                <strong style={{color:'#80c440'}}>MVRV 1.0 – 2.5</strong>
-                <p>Zona neutra a moderadamente otimista. Mercado saudável, com potencial de alta.</p>
-              </div>
-            </div>
-            <div className="zone-row">
-              <span className="dot" style={{background:'#00c44f'}} />
-              <div>
-                <strong style={{color:'#00c44f'}}>MVRV {'<'} 1.0</strong>
-                <p>Preço abaixo do custo médio histórico. Zonas como esta marcaram fundos de ciclo — oportunidade histórica de compra.</p>
-              </div>
-            </div>
+
+        <div className="info-panel">
+          <div className="info-section">
+            <h3>O que é</h3>
+            <p>
+              <strong>O MVRV (Market Value to Realized Value) é uma medida do lucro ou prejuízo
+              não realizado dos detentores de BTC.</strong>
+            </p>
+            <p>
+              Ele é obtido pela divisão do preço de mercado do Bitcoin pelo seu "Preço Realizado" —
+              que é a média ponderada do preço pago por cada moeda, na última vez que foi movida na
+              blockchain. O "Preço Realizado" pode ser entendido como um "custo médio global" dos
+              detentores de BTC.
+            </p>
+            <p>
+              <strong>Em essência, o MVRV mede o nível de lucro ou prejuízo médio dos participantes
+              do mercado.</strong>
+            </p>
+            <p>
+              Um MVRV de 2, por exemplo, indica que, na média, os participantes do mercado estão com
+              um lucro de 2x (ou +100%). Enquanto um MVRV de 0,8 indica que, na média, os participantes
+              do mercado estão com prejuízo de 20% (ou 0,8x o investido).
+            </p>
+          </div>
+          <div className="info-section">
+            <h3>Como interpretar</h3>
+            <p>
+              Um MVRV alto indica que investidores estão com lucros altos, o que pode ser um sinal de
+              proximidade de um topo. Enquanto um MVRV baixo indica que investidores estão com poucos
+              lucros (ou até com prejuízos), podendo indicar proximidade de um fundo.
+            </p>
+            <p>
+              Os fundos de todos os ciclos do BTC aconteceram quando o MVRV foi abaixo de 1 — que indica
+              que, na média, detentores de BTC estão no prejuízo. Historicamente, essas foram as melhores
+              zonas para acumular BTC.
+            </p>
+            <p>
+              Enquanto não é garantia que nos próximos ciclos o MVRV vai chegar a ir abaixo de 1, comprar
+              na região em torno de 1 já é historicamente uma boa estratégia.
+            </p>
+            <p>
+              Também é possível usar o MVRV para buscar regiões de topo de ciclos. Vale se atentar que
+              existe uma tendência que o valor máximo alcançado pelo MVRV diminua ciclo após ciclo.
+            </p>
+            <p>
+              Os topos dos primeiros ciclos do BTC aconteceram com o MVRV acima de 4. Já no ciclo que
+              fez topo em 2021, o MVRV não chegou até 4. E no ciclo mais recente, que fez topo em 2025,
+              o MVRV não chegou nem até 3.
+            </p>
+            <p>
+              Esse tipo de comportamento é esperado conforme a capitalização de mercado do BTC aumenta,
+              e o mercado amadurece.
+            </p>
           </div>
         </div>
-      </div>
 
       </div>
 
@@ -113,7 +122,6 @@ export default function MVRVPage() {
           border: 1px solid var(--border-subtle);
           border-radius: 12px;
           overflow: hidden;
-          margin-bottom: 20px;
         }
         .info-panel {
           display: grid;
@@ -143,11 +151,6 @@ export default function MVRVPage() {
           margin: 0 0 8px;
         }
         .info-section strong { color: var(--text-secondary); }
-        .zone-rows { display: flex; flex-direction: column; gap: 14px; }
-        .zone-row { display: flex; gap: 12px; align-items: flex-start; }
-        .zone-row .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; margin-top: 3px; }
-        .zone-row div p { font-size: 12px; color: var(--text-muted); margin: 3px 0 0; line-height: 1.5; }
-        .zone-row strong { font-size: 13px; }
       `}</style>
     </Layout>
   );
