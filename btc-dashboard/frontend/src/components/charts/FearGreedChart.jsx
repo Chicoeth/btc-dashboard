@@ -493,9 +493,9 @@ export default function FearGreedChart({ priceData, fngData, loading, error }) {
           line-height:1; letter-spacing:0.03em;
         }
         .chart-footer {
-          display:flex; align-items:center; gap:8px; padding:8px 20px;
-          border-top:1px solid var(--border-subtle); font-family:var(--font-mono);
-          font-size:10px; color:var(--text-muted); flex-wrap:wrap;
+          display:flex; align-items:center; justify-content:flex-end;
+          gap:8px; padding:8px 20px; font-family:var(--font-mono);
+          font-size:9px; color:var(--text-muted); flex-wrap:wrap;
         }
       `}</style>
     </div>
