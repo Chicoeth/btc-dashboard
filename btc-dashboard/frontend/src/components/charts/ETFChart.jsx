@@ -488,7 +488,10 @@ export default function ETFChart({ etfData, loading, error }) {
       </div>
 
       <div className="chart-footer">
-        <span>{data.length} registros · {data.length ? `${data[0].date} → ${data[data.length-1].date}` : ''}</span>
+        <span>{data.length} registros</span>
+        <span>·</span>
+        <span>{data.length ? `${data[0].date} → ${data[data.length-1].date}` : ''}</span>
+        <span>·</span>
         <span>Fonte: US Spot Bitcoin ETFs · bitbo.io</span>
       </div>
 
@@ -565,9 +568,9 @@ export default function ETFChart({ etfData, loading, error }) {
         .flow-unit-btn.active { color:#f7931a; background:rgba(247,147,26,0.1); font-weight:600; }
 
         .chart-footer {
-          display:flex; justify-content:space-between; align-items:center;
-          padding:6px 16px 10px; font-family:var(--font-mono);
-          font-size:8px; color:#28283c; letter-spacing:0.02em;
+          display:flex; align-items:center; justify-content:flex-end;
+          gap:8px; padding:8px 20px; font-family:var(--font-mono);
+          font-size:9px; color:var(--text-muted); flex-wrap:wrap;
         }
       `}</style>
     </div>
