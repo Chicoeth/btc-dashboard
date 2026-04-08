@@ -71,13 +71,33 @@ export default function MedoGananciaPage() {
           <div className="info-section card">
             <h3>O que é</h3>
             <p>
-              O Índice do Medo e Ganância (Fear &amp; Greed Index) é um indicador
-              composto que tenta medir o sentimento predominante dos participantes
-              do mercado de Bitcoin em uma escala de 0 a 100.
+              <strong>O Índice do Medo &amp; Ganância (Fear &amp; Greed Index) busca medir o sentimento
+              predominante nos participantes do mercado.</strong>
             </p>
             <p>
-              O índice foi criado pela <strong>alternative.me</strong> e é calculado
-              diariamente com base em seis fatores ponderados:
+              Sua escala vai de 0 a 100, sendo 0 o ponto de medo máximo e 100 o ponto de ganância máxima.
+            </p>
+            <div className="scale-legend">
+              {[
+                { range: '0–24',   label: 'Medo Extremo',     color: '#e8000a' },
+                { range: '25–44',  label: 'Medo',             color: '#f07000' },
+                { range: '45–55',  label: 'Neutro',           color: '#f5c400' },
+                { range: '56–74',  label: 'Ganância',         color: '#80c400' },
+                { range: '75–100', label: 'Ganância Extrema', color: '#00c44f' },
+              ].map(({ range, label, color }) => (
+                <div key={range} className="scale-row">
+                  <span className="scale-dot" style={{ background: color }} />
+                  <span className="scale-range" style={{ color }}>{range}</span>
+                  <span className="scale-label">{label}</span>
+                </div>
+              ))}
+            </div>
+            <p>
+              O índice foi criado pela{' '}
+              <a href="https://alternative.me/crypto/fear-and-greed-index/" target="_blank" rel="noopener noreferrer" className="info-link">
+                alternative.me
+              </a>{' '}
+              e é calculado diariamente com base em seis fatores ponderados:
             </p>
             <ul>
               <li><span className="tag">25%</span> Volatilidade do preço vs. médias históricas</li>
@@ -87,49 +107,33 @@ export default function MedoGananciaPage() {
               <li><span className="tag">10%</span> Dominância do Bitcoin no mercado cripto</li>
               <li><span className="tag">15%</span> Tendências de busca no Google Trends</li>
             </ul>
-            <div className="scale-legend">
-              {[
-                { range: '0–24',  label: 'Medo Extremo',    color: '#e8000a' },
-                { range: '25–44', label: 'Medo',            color: '#f07000' },
-                { range: '45–55', label: 'Neutro',          color: '#f5c400' },
-                { range: '56–74', label: 'Ganância',        color: '#80c400' },
-                { range: '75–100',label: 'Ganância Extrema',color: '#00c44f' },
-              ].map(({ range, label, color }) => (
-                <div key={range} className="scale-row">
-                  <span className="scale-dot" style={{ background: color }} />
-                  <span className="scale-range" style={{ color }}>{range}</span>
-                  <span className="scale-label">{label}</span>
-                </div>
-              ))}
-            </div>
           </div>
 
           <div className="info-section card">
-            <h3>Como Usar</h3>
+            <h3>Como usar</h3>
             <p>
-              O índice funciona como um sinal contrário de sentimento: os extremos
-              costumam marcar pontos de inflexão no preço.
+              O indicador pode ser útil para apontar momentos de sentimentos extremos no mercado.
             </p>
-            <div className="tip-block tip-buy">
-              <div className="tip-title">📉 Medo Extremo (0–24)</div>
-              <p>
-                O mercado está em pânico. Historicamente, esses períodos
-                correspondem a zonas de acumulação favoráveis para investidores
-                com visão de longo prazo.
-              </p>
-            </div>
-            <div className="tip-block tip-sell">
-              <div className="tip-title">📈 Ganância Extrema (75–100)</div>
-              <p>
-                O mercado está eufórico. Períodos prolongados de ganância extrema
-                frequentemente precedem correções. É um sinal de cautela, não
-                necessariamente de venda imediata.
-              </p>
-            </div>
-            <p className="caveat">
-              ⚠ O índice mede sentimento, não fundamentos. Use-o como
-              complemento a outros indicadores — nunca como sinal isolado de
-              entrada ou saída.
+            <p>
+              Embora a sabedoria popular diga para "vender ao som de violinos, e comprar ao som de
+              canhões" (ou seja, vender na ganância e comprar no medo), é preciso considerar algumas
+              nuances desse indicador.
+            </p>
+            <p>
+              O Índice do Medo &amp; Ganância pode ficar por períodos extensos de tempo mostrando
+              leituras extremas, enquanto a tendência do BTC continua.
+            </p>
+            <p>
+              Ou seja, o indicador pode já dar leituras de "Ganância Extrema" no início de uma tendência
+              de alta (onde o preço ainda vai subir mais); ou dar leituras de "Medo Extremo" no início de
+              uma tendência de baixa (onde o preço ainda vai cair mais).
+            </p>
+            <p>
+              O indicador ainda é útil, mas é importante sempre considerar o contexto maior do momento
+              de mercado. Temos um artigo que fala mais sobre esse indicador{' '}
+              <a href="https://app.paradigma.education/feed/post/688297f7168ba1b5f807a5dc" target="_blank" rel="noopener noreferrer" className="info-link">
+                aqui
+              </a>.
             </p>
           </div>
         </div>
@@ -169,7 +173,6 @@ export default function MedoGananciaPage() {
           overflow: hidden;
         }
 
-        /* Info panels — 2 columns below chart */
         .info-panel {
           display: grid;
           grid-template-columns: 1fr 1fr;
@@ -191,6 +194,16 @@ export default function MedoGananciaPage() {
           font-size: 13px; color: var(--text-muted); line-height: 1.7; margin: 0;
         }
         .info-section strong { color: var(--text-secondary); font-weight: 600; }
+
+        .info-link {
+          color: var(--brand-orange);
+          text-decoration: none;
+          border-bottom: 1px solid rgba(247,147,26,0.3);
+          transition: border-color 0.2s;
+        }
+        .info-link:hover {
+          border-bottom-color: var(--brand-orange);
+        }
 
         .info-section ul {
           list-style: none; display: flex; flex-direction: column; gap: 5px;
@@ -217,26 +230,6 @@ export default function MedoGananciaPage() {
           min-width: 36px;
         }
         .scale-label { font-size: 11px; color: var(--text-secondary); }
-
-        .tip-block {
-          border-radius: 6px; padding: 10px 12px;
-          display: flex; flex-direction: column; gap: 5px;
-        }
-        .tip-buy  { background: rgba(232,0,10,0.06);  border: 1px solid rgba(232,0,10,0.15);  }
-        .tip-sell { background: rgba(0,196,79,0.06);  border: 1px solid rgba(0,196,79,0.15);  }
-
-        .tip-title { font-family: var(--font-mono); font-size: 11px; font-weight: 600; color: var(--text-primary); }
-        .tip-block p {
-          font-size: 11px; color: var(--text-secondary);
-          line-height: 1.55; margin: 0;
-        }
-
-        .caveat {
-          font-family: var(--font-mono) !important; font-size: 10px !important;
-          color: var(--text-muted) !important; line-height: 1.5 !important;
-          background: rgba(255,255,255,0.02); border: 1px solid var(--border-subtle);
-          border-radius: 5px; padding: 8px 10px;
-        }
 
         @media (max-width: 900px) {
           .info-panel { grid-template-columns: 1fr; }
