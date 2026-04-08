@@ -38,55 +38,36 @@ export default function StrategyPage() {
         </div>
 
         <div className="page-card">
-        <StrategyChart
-          strategyData={strategyData}
-          priceData={priceData}
-          loading={loading}
-          error={error}
-        />
-      </div>
-      <div className="info-panel">
-        <div className="info-section">
-          <h3>O que é este gráfico?</h3>
-          <p>
-            Mostra a posição em Bitcoin da <strong>Strategy</strong> (anteriormente MicroStrategy / MSTR),
-            a empresa com a maior reserva corporativa de BTC do mundo.
-          </p>
-          <p>
-            A <strong>linha laranja</strong> é o preço de mercado do Bitcoin. A <strong>linha tracejada</strong> é o
-            custo médio de aquisição da Strategy — o preço médio que a empresa pagou por todos os seus BTCs.
-          </p>
-          <p>
-            Quando o preço está acima da linha tracejada, a empresa está no lucro. Quando está abaixo, no prejuízo.
-          </p>
+          <StrategyChart
+            strategyData={strategyData}
+            priceData={priceData}
+            loading={loading}
+            error={error}
+          />
         </div>
-        <div className="info-section">
-          <h3>Como interpretar</h3>
-          <div className="zone-rows">
-            <div className="zone-row">
-              <span className="dot" style={{background:'#f7931a'}} />
-              <div>
-                <strong style={{color:'#f7931a'}}>Holdings (barras)</strong>
-                <p>Quantidade total de BTC em posse da Strategy. Aumenta a cada compra — a empresa nunca vendeu.</p>
-              </div>
-            </div>
-            <div className="zone-row">
-              <span className="dot" style={{background:'#7878c0'}} />
-              <div>
-                <strong style={{color:'#7878c0'}}>Custo Médio (tracejada)</strong>
-                <p>Preço médio ponderado de todas as compras. Funciona como um "preço realizado" da Strategy.</p>
-              </div>
-            </div>
-            <div className="zone-row">
-              <span className="dot" style={{background:'#9090b0'}} />
-              <div>
-                <strong style={{color:'#9090b0'}}>MVRV Strategy</strong>
-                <p>Preço BTC dividido pelo custo médio. Acima de 1.0 = lucro, abaixo de 1.0 = prejuízo. Métrica opcional no toggle.</p>
-              </div>
-            </div>
+
+        <div className="info-panel">
+          <div className="info-section">
+            <h3>O que é</h3>
+            <p>
+              <strong>Esse gráfico mostra a posição em BTC da Strategy</strong> (anteriormente
+              MicroStrategy / MSTR), maior empresa de entesouramento de bitcoin do mundo, chefiada
+              por Michael Saylor.
+            </p>
+            <p>
+              A linha laranja é o preço de mercado do Bitcoin. A linha tracejada é o custo médio de
+              aquisição da Strategy — o preço médio que a empresa pagou por todos os seus BTC. Na
+              parte inferior, em laranja, temos o total de BTC que a empresa detém.
+            </p>
+            <p>
+              Quando o preço está acima da linha tracejada, a empresa está no lucro. Quando está
+              abaixo, no prejuízo.
+            </p>
+            <p>
+              É possível também visualizar as compras que a empresa fez ao longo do tempo.
+            </p>
           </div>
         </div>
-      </div>
 
       </div>
 
@@ -119,14 +100,12 @@ export default function StrategyPage() {
           border: 1px solid var(--border-subtle);
           border-radius: 12px;
           overflow: hidden;
-          margin-bottom: 20px;
         }
         .info-panel {
           display: grid;
-          grid-template-columns: 1fr 1fr;
+          grid-template-columns: 1fr;
           gap: 16px;
         }
-        @media (max-width: 900px) { .info-panel { grid-template-columns: 1fr; } }
         .info-section {
           background: var(--bg-card);
           border: 1px solid var(--border-subtle);
@@ -149,11 +128,6 @@ export default function StrategyPage() {
           margin: 0 0 8px;
         }
         .info-section strong { color: var(--text-secondary); }
-        .zone-rows { display: flex; flex-direction: column; gap: 14px; }
-        .zone-row { display: flex; gap: 12px; align-items: flex-start; }
-        .zone-row .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; margin-top: 3px; }
-        .zone-row div p { font-size: 12px; color: var(--text-muted); margin: 3px 0 0; line-height: 1.5; }
-        .zone-row strong { font-size: 13px; }
       `}</style>
     </Layout>
   );
