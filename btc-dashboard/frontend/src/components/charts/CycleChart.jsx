@@ -151,6 +151,9 @@ function buildMeanStdDev(seriesList) {
   return { mean, upper, lower };
 }
 
+// SVG checkmark as a data URI (extracted to avoid breaking styled-jsx parser)
+const CHECKMARK_SVG = "data:image/svg+xml,%3Csvg viewBox='0 0 10 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 4L4 7L9 1' stroke='white' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E";
+
 // ─── Componente ────────────────────────────────────────────────────────────
 
 export default function CycleChart({ priceData, loading, error }) {
@@ -504,6 +507,12 @@ export default function CycleChart({ priceData, loading, error }) {
       <style jsx>{`
         .cycle-chart-wrapper { display: flex; flex-direction: column; }
 
+        .chart-footer {
+          display:flex; align-items:center; justify-content:flex-end;
+          gap:8px; padding:8px 20px; font-family:var(--font-mono);
+          font-size:9px; color:var(--text-muted); flex-wrap:wrap;
+        }
+
         .mode-selector { display: flex; gap: 8px; padding: 16px 20px 0; flex-wrap: wrap; }
         .mode-btn {
           display: flex; align-items: center; gap: 7px; padding: 9px 16px;
@@ -526,7 +535,6 @@ export default function CycleChart({ priceData, loading, error }) {
         .cycle-label { font-family: var(--font-mono); font-size: 10px; color: var(--text-muted); letter-spacing: 0.06em; text-transform: uppercase; }
         .cycle-name  { font-family: var(--font-display); font-size: 18px; font-weight: 700; color: var(--text-primary); letter-spacing: -0.01em; }
 
-        /* Seletor de período */
         .period-btns { display: flex; gap: 4px; }
         .period-btn {
           padding: 4px 10px; font-family: var(--font-mono); font-size: 10px; font-weight: 500;
@@ -536,7 +544,6 @@ export default function CycleChart({ priceData, loading, error }) {
         .period-btn:hover  { color: var(--text-primary); border-color: var(--border-default); }
         .period-btn.active { color: var(--brand-orange); border-color: rgba(247,147,26,0.4); background: rgba(247,147,26,0.06); }
 
-        /* Checkboxes */
         .chart-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
         .check-box {
           display: flex; align-items: center; gap: 7px; padding: 6px 12px;
@@ -553,10 +560,6 @@ export default function CycleChart({ priceData, loading, error }) {
           border-radius: 3px; position: relative; flex-shrink: 0; transition: all 0.15s;
         }
         .check-box.active .check-indicator { background: var(--brand-orange); border-color: var(--brand-orange); }
-        .check-box.active .check-indicator::after {
-          content: ''; position: absolute; inset: 2px;
-          background: url("data:image/svg+xml,%3Csvg viewBox='0 0 10 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 4L4 7L9 1' stroke='white' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat;
-        }
 
         .chart-state {
           position: absolute; inset: 0; display: flex; flex-direction: column;
@@ -568,11 +571,16 @@ export default function CycleChart({ priceData, loading, error }) {
           border-top-color: var(--brand-orange); border-radius: 50%; animation: spin 0.8s linear infinite;
         }
         @keyframes spin { to { transform: rotate(360deg); } }
+      `}</style>
 
-        .chart-footer {
-          display:flex; align-items:center; justify-content:flex-end;
-          gap:8px; padding:8px 20px; font-family:var(--font-mono);
-          font-size:9px; color:var(--text-muted); flex-wrap:wrap;
+      {/* Checkmark icon uses inline SVG URL that breaks styled-jsx parser,
+          so it must be in a separate global style block */}
+      <style jsx global>{`
+        .cycle-chart-wrapper .check-box.active .check-indicator::after {
+          content: '';
+          position: absolute;
+          inset: 2px;
+          background: url("${CHECKMARK_SVG}") center/contain no-repeat;
         }
       `}</style>
     </div>
