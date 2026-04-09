@@ -135,7 +135,7 @@ export default function Sidebar({ collapsed, onToggle, isMobile, mobileOpen, onM
           /* ─── Logo ─── */
           .logo {
             display:flex; align-items:center; gap:10px;
-            padding:20px 16px 18px; border-bottom:1px solid var(--border-subtle); margin-bottom:8px;
+            padding:20px 20px 18px; border-bottom:1px solid var(--border-subtle); margin-bottom:8px;
           }
           .sidebar--collapsed .logo {
             justify-content:center; padding:20px 0 18px;
@@ -161,14 +161,14 @@ export default function Sidebar({ collapsed, onToggle, isMobile, mobileOpen, onM
 
           .nav-section-label {
             font-family:var(--font-mono); font-size:9px; letter-spacing:0.1em;
-            color:var(--text-muted); padding:8px 16px 6px; text-transform:uppercase;
+            color:var(--text-muted); padding:8px 20px 6px; text-transform:uppercase;
           }
 
           .sidebar-nav { flex:1; overflow-y:auto; padding-bottom:16px; }
 
           .nav-item {
             display:flex; align-items:center; gap:10px;
-            padding:9px 16px; font-size:13px; font-weight:400;
+            padding:9px 20px; font-size:13px; font-weight:400;
             color:var(--text-secondary); text-decoration:none;
             transition:color 0.15s, background 0.15s;
             position:relative; font-family:var(--font-body); letter-spacing:0.01em;
@@ -216,7 +216,7 @@ export default function Sidebar({ collapsed, onToggle, isMobile, mobileOpen, onM
           /* ─── Mobile drawer ─── */
           @media (max-width: 768px) {
             .nav-item {
-              padding: 12px 16px;
+              padding: 12px 20px;
               font-size: 14px;
             }
           }
