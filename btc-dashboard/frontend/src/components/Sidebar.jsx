@@ -135,19 +135,12 @@ export default function Sidebar({ collapsed, onToggle, isMobile, mobileOpen, onM
           /* ─── Logo ─── */
           .logo {
             display:flex; align-items:center; gap:10px;
-            padding:20px 20px 18px; border-bottom:1px solid var(--border-subtle); margin-bottom:8px;
+            padding:20px 20px 18px 24px; border-bottom:1px solid var(--border-subtle); margin-bottom:8px;
           }
           .sidebar--collapsed .logo {
             justify-content:center; padding:20px 0 18px;
           }
-          .logo-link {
-            display:flex; align-items:center; gap:10px;
-            text-decoration:none; cursor:pointer;
-          }
-          .logo-effigy {
-            width:44px; height:44px; flex-shrink:0;
-            object-fit:contain;
-          }
+
           .logo-text { display:flex; flex-direction:column; line-height:1; }
           .logo-title {
             font-family: 'Barlow', var(--font-display), sans-serif;
@@ -161,41 +154,10 @@ export default function Sidebar({ collapsed, onToggle, isMobile, mobileOpen, onM
 
           .nav-section-label {
             font-family:var(--font-mono); font-size:9px; letter-spacing:0.1em;
-            color:var(--text-muted); padding:8px 20px 6px; text-transform:uppercase;
+            color:var(--text-muted); padding:8px 20px 6px 24px; text-transform:uppercase;
           }
 
           .sidebar-nav { flex:1; overflow-y:auto; padding-bottom:16px; }
-
-          .nav-item {
-            display:flex; align-items:center; gap:10px;
-            padding:9px 20px; font-size:13px; font-weight:400;
-            color:var(--text-secondary); text-decoration:none;
-            transition:color 0.15s, background 0.15s;
-            position:relative; font-family:var(--font-body); letter-spacing:0.01em;
-          }
-          .sidebar--collapsed .nav-item {
-            justify-content:center; padding:10px 0;
-          }
-          .nav-item:hover { color:var(--text-primary); background:rgba(255,255,255,0.03); }
-          .nav-item--active {
-            color:var(--brand-orange) !important;
-            background:rgba(247,147,26,0.06) !important;
-          }
-          .nav-item--active::before {
-            content:''; position:absolute; left:0; top:0; bottom:0;
-            width:2px; background:var(--brand-orange); border-radius:0 2px 2px 0;
-          }
-          .nav-item--soon { opacity:0.45; pointer-events:none; }
-
-          .nav-icon { display:flex; align-items:center; opacity:0.7; flex-shrink:0; }
-          .nav-item--active .nav-icon, .nav-item:hover .nav-icon { opacity:1; }
-          .nav-label { flex:1; }
-
-          .soon-badge {
-            font-size:9px; font-family:var(--font-mono); text-transform:uppercase;
-            letter-spacing:0.05em; background:rgba(247,147,26,0.1);
-            color:var(--brand-orange); padding:1px 5px; border-radius:3px; opacity:0.7;
-          }
 
           .sidebar-toggle {
             display:flex; align-items:center; justify-content:center;
@@ -211,12 +173,56 @@ export default function Sidebar({ collapsed, onToggle, isMobile, mobileOpen, onM
             color:var(--text-primary); border-color:var(--border-default);
             background:rgba(255,255,255,0.03);
           }
+        `}</style>
 
+        {/* Nav items rendered by <Link> are outside styled-jsx scope,
+            so these styles must be global to reach the <a> elements */}
+        <style jsx global>{`
+          .sidebar .logo-link {
+            display:flex; align-items:center; gap:10px;
+            text-decoration:none; cursor:pointer;
+          }
+          .sidebar .logo-effigy {
+            width:44px; height:44px; flex-shrink:0;
+            object-fit:contain;
+          }
+
+          .sidebar .nav-item {
+            display:flex; align-items:center; gap:10px;
+            padding:9px 20px 9px 24px; font-size:13px; font-weight:400;
+            color:var(--text-secondary); text-decoration:none;
+            transition:color 0.15s, background 0.15s;
+            position:relative; font-family:var(--font-body); letter-spacing:0.01em;
+          }
+          .sidebar--collapsed .nav-item {
+            justify-content:center; padding:10px 0;
+          }
+          .sidebar .nav-item:hover { color:var(--text-primary); background:rgba(255,255,255,0.03); }
+          .sidebar .nav-item--active {
+            color:var(--brand-orange) !important;
+            background:rgba(247,147,26,0.06) !important;
+          }
+          .sidebar .nav-item--active::before {
+            content:''; position:absolute; left:0; top:0; bottom:0;
+            width:2px; background:var(--brand-orange); border-radius:0 2px 2px 0;
+          }
+          .sidebar .nav-item--soon { opacity:0.45; pointer-events:none; }
+
+          .sidebar .nav-icon { display:flex; align-items:center; opacity:0.7; flex-shrink:0; }
+          .sidebar .nav-item--active .nav-icon,
+          .sidebar .nav-item:hover .nav-icon { opacity:1; }
+          .sidebar .nav-label { flex:1; }
+
+          .sidebar .soon-badge {
+            font-size:9px; font-family:var(--font-mono); text-transform:uppercase;
+            letter-spacing:0.05em; background:rgba(247,147,26,0.1);
+            color:var(--brand-orange); padding:1px 5px; border-radius:3px; opacity:0.7;
+          }
 
           /* ─── Mobile drawer ─── */
           @media (max-width: 768px) {
-            .nav-item {
-              padding: 12px 20px;
+            .sidebar .nav-item {
+              padding: 12px 20px 12px 24px;
               font-size: 14px;
             }
           }
