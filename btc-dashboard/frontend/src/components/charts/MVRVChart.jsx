@@ -441,12 +441,17 @@ export default function MVRVChart({ mvrvData, loading, error }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [echartsReady, data.length]);
 
+  /* ─── sync currentZoom when period changes ─── */
+  useEffect(() => {
+    setCurrentZoom(zoomRange);
+  }, [zoomRange]);
+
   useEffect(() => {
     const chart = chartInst.current;
     if (!chart || !data.length) return;
     const option = buildOption(currentZoom);
     if (option) chart.setOption(patchOption(option, isDark), { notMerge: false, replaceMerge: ['series'] });
-  }, [isLog, coloredPrice, coloredMvrv, zoomRange, currentZoom, buildOption, isDark]);
+  }, [isLog, coloredPrice, coloredMvrv, currentZoom, buildOption, isDark]);
 
   const latest      = data[data.length - 1];
   const latestColor = latest ? mvrvColor(latest[3]) : '#9090b0';
