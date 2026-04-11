@@ -352,13 +352,18 @@ export default function FearGreedChart({ priceData, fngData, loading, error }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [echartsReady, merged.length]);
 
+  /* ─── sync currentZoom when period changes ─── */
+  useEffect(() => {
+    setCurrentZoom(zoomRange);
+  }, [zoomRange]);
+
   // Update when settings/zoom change — notMerge:false is faster for partial updates
   useEffect(() => {
     const chart = chartInst.current;
     if (!chart || !merged.length) return;
     const option = buildOption(currentZoom);
     if (option) chart.setOption(patchOption(option, isDark), { notMerge: false, replaceMerge: ['series'] });
-  }, [isLog, colored, zoomRange, coloredSeries, currentZoom]);
+  }, [isLog, colored, coloredSeries, currentZoom, buildOption, isDark]);
 
   const latest      = merged[merged.length - 1];
   const latestColor = latest ? fngColor(latest.fng) : '#9090b0';
