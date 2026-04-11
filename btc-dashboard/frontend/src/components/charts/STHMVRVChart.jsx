@@ -493,13 +493,18 @@ export default function STHMVRVChart({ sthMvrvData, loading, error }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [echartsReady, data.length]);
 
+  /* ─── sync currentZoom when period changes ─── */
+  useEffect(() => {
+    setCurrentZoom(zoomRange);
+  }, [zoomRange]);
+
   /* ─── update chart ─── */
   useEffect(() => {
     const chart = chartInst.current;
     if (!chart || !data.length) return;
     const option = buildOption(currentZoom);
     if (option) chart.setOption(patchOption(option, isDark), { notMerge: false, replaceMerge: ['series'] });
-  }, [isLog, coloredPrice, coloredMvrv, showBands, zoomRange, currentZoom, buildOption, isDark]);
+  }, [isLog, coloredPrice, coloredMvrv, showBands, currentZoom, buildOption, isDark]);
 
   const latest      = data[data.length - 1];
   const latestColor = latest ? sthMvrvColor(latest[3]) : '#9090b0';
