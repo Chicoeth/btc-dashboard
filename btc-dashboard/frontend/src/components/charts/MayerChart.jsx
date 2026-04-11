@@ -380,13 +380,18 @@ export default function MayerChart({ priceData, loading, error }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [echartsReady, data.length]);
 
+  /* ─── sync currentZoom when period changes ─── */
+  useEffect(() => {
+    setCurrentZoom(zoomRange);
+  }, [zoomRange]);
+
   /* ─── update chart ─── */
   useEffect(() => {
     const chart = chartInst.current;
     if (!chart || !data.length) return;
     const option = buildOption(currentZoom);
     if (option) chart.setOption(patchOption(option, isDark), { notMerge: false, replaceMerge: ['series'] });
-  }, [isLog, coloredPrice, zoomRange, currentZoom, buildOption, isDark]);
+  }, [isLog, coloredPrice, currentZoom, buildOption, isDark]);
 
   const latest      = data.length ? data[data.length - 1] : null;
   const latestColor = latest ? mayerColor(latest.mayer) : '#9090b0';
