@@ -443,6 +443,11 @@ export default function StrategyChart({ strategyData, priceData, loading, error 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [echartsReady, data.length]);
 
+  /* ─── sync currentZoom when period changes ─── */
+  useEffect(() => {
+    setCurrentZoom(zoomRange);
+  }, [zoomRange]);
+
   // ─── Update ───
   useEffect(() => {
     const chart = chartInst.current;
@@ -450,7 +455,7 @@ export default function StrategyChart({ strategyData, priceData, loading, error 
     chart.resize();
     const option = buildOption(currentZoom);
     if (option) chart.setOption(patchOption(option, isDark), { notMerge: true });
-  }, [isLog, showHoldings, showMvrv, showBuys, zoomRange, currentZoom, buildOption, chartHeight, isDark]);
+  }, [isLog, showHoldings, showMvrv, showBuys, currentZoom, buildOption, chartHeight, isDark]);
 
   const latest = data.length ? data[data.length - 1] : null;
   const plPercent = latest ? ((latest.btcPrice - latest.costBasis) / latest.costBasis * 100).toFixed(1) : 0;
