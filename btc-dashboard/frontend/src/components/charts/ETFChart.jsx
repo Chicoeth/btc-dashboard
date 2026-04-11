@@ -409,6 +409,11 @@ export default function ETFChart({ etfData, loading, error }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [echartsReady, data.length]);
 
+  /* ─── sync currentZoom when period changes ─── */
+  useEffect(() => {
+    setCurrentZoom(zoomRange);
+  }, [zoomRange]);
+
   // ─── Update ───
   useEffect(() => {
     const chart = chartInst.current;
@@ -416,7 +421,7 @@ export default function ETFChart({ etfData, loading, error }) {
     chart.resize();
     const option = buildOption(currentZoom);
     if (option) chart.setOption(patchOption(option, isDark), { notMerge: false, replaceMerge: ['series'] });
-  }, [isLog, showByTicker, showFlows, flowUnit, zoomRange, currentZoom, chartHeight, buildOption, isDark]);
+  }, [isLog, showByTicker, showFlows, flowUnit, currentZoom, chartHeight, buildOption, isDark]);
 
   const latest = data[data.length - 1];
 
