@@ -1,16 +1,27 @@
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { TrendingUp, Activity, BarChart2, Users, Divide, GitCompareArrows, Building2, Landmark, PanelLeftClose, PanelLeftOpen, X } from 'lucide-react';
+import { TrendingUp, Activity, BarChart2, Users, Divide, GitCompareArrows, Building2, Landmark, Calculator, PanelLeftClose, PanelLeftOpen, X } from 'lucide-react';
 
-const NAV = [
-  { label: 'Preço Histórico',        href: '/mercado/preco',                icon: TrendingUp       },
-  { label: 'MVRV',                   href: '/indicadores/mvrv',             icon: BarChart2         },
-  { label: 'STH MVRV',               href: '/indicadores/sth-mvrv',         icon: Users             },
-  { label: 'Múltiplo de Mayer',      href: '/indicadores/multiplo-mayer',   icon: Divide            },
-  { label: 'Índice Medo & Ganância', href: '/indicadores/medo-ganancia',    icon: Activity          },
-  { label: 'Comparador de Ciclos',   href: '/indicadores/comparador-ciclos', icon: GitCompareArrows },
-  { label: 'Strategy (MSTR)',        href: '/indicadores/strategy',          icon: Building2        },
-  { label: 'ETFs de Bitcoin',        href: '/indicadores/etf-holdings',      icon: Landmark         },
+const NAV_SECTIONS = [
+  {
+    label: 'INDICADORES',
+    items: [
+      { label: 'Preço Histórico',        href: '/mercado/preco',                icon: TrendingUp       },
+      { label: 'MVRV',                   href: '/indicadores/mvrv',             icon: BarChart2         },
+      { label: 'STH MVRV',               href: '/indicadores/sth-mvrv',         icon: Users             },
+      { label: 'Múltiplo de Mayer',      href: '/indicadores/multiplo-mayer',   icon: Divide            },
+      { label: 'Índice Medo & Ganância', href: '/indicadores/medo-ganancia',    icon: Activity          },
+      { label: 'Comparador de Ciclos',   href: '/indicadores/comparador-ciclos', icon: GitCompareArrows },
+      { label: 'Strategy (MSTR)',        href: '/indicadores/strategy',          icon: Building2        },
+      { label: 'ETFs de Bitcoin',        href: '/indicadores/etf-holdings',      icon: Landmark         },
+    ],
+  },
+  {
+    label: 'FERRAMENTAS',
+    items: [
+      { label: 'Simulador de DCA',       href: '/ferramentas/dca-simulador',    icon: Calculator        },
+    ],
+  },
 ];
 
 export default function Sidebar({ collapsed, onToggle, isMobile, mobileOpen, onMobileClose }) {
@@ -35,6 +46,8 @@ export default function Sidebar({ collapsed, onToggle, isMobile, mobileOpen, onM
     isMobile && mobileOpen ? 'sidebar--mobile-open' : '',
   ].filter(Boolean).join(' ');
 
+  const showLabels = !collapsed || isMobile;
+
   return (
     <>
       {/* Overlay behind drawer on mobile */}
@@ -52,7 +65,7 @@ export default function Sidebar({ collapsed, onToggle, isMobile, mobileOpen, onM
               width={44}
               height={44}
             />
-            {(!collapsed || isMobile) && (
+            {showLabels && (
               <div className="logo-text">
                 <span className="logo-title">Paradigma</span>
                 <span className="logo-subtitle">Dashboard</span>
@@ -67,25 +80,28 @@ export default function Sidebar({ collapsed, onToggle, isMobile, mobileOpen, onM
           )}
         </div>
 
-        {(!collapsed || isMobile) && <div className="nav-section-label">INDICADORES</div>}
-
         <nav className="sidebar-nav">
-          {NAV.map(({ label, href, icon: Icon, soon }) => {
-            const active = router.pathname === href;
-            return (
-              <Link
-                key={href}
-                href={soon ? '#' : href}
-                className={`nav-item ${active ? 'nav-item--active' : ''} ${soon ? 'nav-item--soon' : ''}`}
-                title={!isMobile && collapsed ? label : undefined}
-                onClick={(e) => handleNavClick(e, href, soon)}
-              >
-                <span className="nav-icon"><Icon size={15} strokeWidth={1.5} /></span>
-                {(!collapsed || isMobile) && <span className="nav-label">{label}</span>}
-                {(!collapsed || isMobile) && soon && <span className="soon-badge">em breve</span>}
-              </Link>
-            );
-          })}
+          {NAV_SECTIONS.map((section, idx) => (
+            <div key={section.label} className={`nav-section ${idx > 0 ? 'nav-section--divided' : ''}`}>
+              {showLabels && <div className="nav-section-label">{section.label}</div>}
+              {section.items.map(({ label, href, icon: Icon, soon }) => {
+                const active = router.pathname === href;
+                return (
+                  <Link
+                    key={href}
+                    href={soon ? '#' : href}
+                    className={`nav-item ${active ? 'nav-item--active' : ''} ${soon ? 'nav-item--soon' : ''}`}
+                    title={!isMobile && collapsed ? label : undefined}
+                    onClick={(e) => handleNavClick(e, href, soon)}
+                  >
+                    <span className="nav-icon"><Icon size={15} strokeWidth={1.5} /></span>
+                    {showLabels && <span className="nav-label">{label}</span>}
+                    {showLabels && soon && <span className="soon-badge">em breve</span>}
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
         </nav>
 
         {/* Desktop collapse toggle — hidden on mobile */}
@@ -150,6 +166,20 @@ export default function Sidebar({ collapsed, onToggle, isMobile, mobileOpen, onM
           .logo-subtitle {
             font-family:var(--font-mono); font-size:9px; color:var(--text-muted);
             letter-spacing:0.12em; text-transform:uppercase; margin-top:2px;
+          }
+
+          .nav-section {
+            display: flex;
+            flex-direction: column;
+          }
+          .nav-section--divided {
+            margin-top: 14px;
+            padding-top: 10px;
+            border-top: 1px solid var(--border-subtle);
+          }
+          .sidebar--collapsed .nav-section--divided {
+            margin-top: 10px;
+            padding-top: 8px;
           }
 
           .nav-section-label {
