@@ -550,7 +550,10 @@ export default function DCASimulator() {
             const pnl = value - invested;
             const pnlPct = invested > 0 ? (pnl / invested) * 100 : 0;
             const pnlColor = pnl >= 0 ? '#00c44f' : '#e8000a';
-            const purchaseInfo = (point && point.isPurchase) ? `
+            // Só mostra info do aporte se a série "Aportes" estiver visível na legenda
+            const legendOpt = chart.getOption()?.legend?.[0];
+            const aportesVisible = legendOpt?.selected?.['Aportes'] !== false;
+            const purchaseInfo = (aportesVisible && point && point.isPurchase) ? `
               <div style="display:flex;justify-content:space-between;gap:18px;margin-bottom:6px;padding-bottom:6px;border-bottom:1px solid #1e1e35;">
                 <span style="color:#00c44f;">🟢 Aporte:</span>
                 <span style="color:#00c44f;font-weight:600;">+${fmtUSD(point.purchaseUSD)} @ ${fmtUSD(point.priceAtPurchase)}</span>
@@ -575,6 +578,11 @@ export default function DCASimulator() {
         },
         legend: {
           data: ['Aportado', 'Valor Atual', 'Aportes'],
+          selected: {
+            'Aportado': true,
+            'Valor Atual': true,
+            'Aportes': false,
+          },
           top: 6,
           right: 16,
           textStyle: { color: '#9090b0', fontSize: 11, fontFamily: 'JetBrains Mono' },
