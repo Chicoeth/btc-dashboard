@@ -365,7 +365,23 @@ export default function DCASimulator() {
     }
 
     if (trades.length === 0) {
-      return { trades: [], numTrades: 0, totalUSD: 0, totalBTC: 0, avgPrice: 0, currentValue: 0, profit: 0, profitPct: 0 };
+      return { trades: [], numTrades: 0, totalUSD: 0, totalBTC: 0, avgPrice: 0, currentValue: 0, profit: 0, profitPct: 0, timeline: [], totalScheduled: aporteDates.length };
+    }
+
+    // Ordena trades por data (fallback pode ter gerado datas fora de ordem)
+    trades.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+
+    // Agrupa trades do mesmo dia (fallback pode ter jogado 2+ aportes no mesmo dia útil)
+    const tradesByDate = new Map();
+    for (const t of trades) {
+      const existing = tradesByDate.get(t.date);
+      if (existing) {
+        existing.usd += t.usd;
+        existing.btc += t.btc;
+        // price permanece o mesmo (mesmo dia)
+      } else {
+        tradesByDate.set(t.date, { ...t });
+      }
     }
 
     const totalUSD = trades.reduce((a, t) => a + t.usd, 0);
@@ -378,31 +394,52 @@ export default function DCASimulator() {
     const profit = currentValue - totalUSD;
     const profitPct = (profit / totalUSD) * 100;
 
-    // Série temporal para gráfico: para cada data de aporte e também pontos intermediários
-    // Simplificação: usar datas de aporte como marcos + todas as datas até hoje com preço
-    // Para não pesar: usar datas de aporte + último dia
-    // Melhor: calcular acumulado em cada data de aporte
-    const timeline = []; // { date, totalUSD, totalBTC, value }
+    /* Timeline: iteramos por TODOS os dias com preço a partir do primeiro aporte,
+       acumulando BTC/USD quando há aporte no dia e recalculando o valor do
+       patrimônio com o preço daquele dia. Isso dá a curva real de evolução
+       (não só pontos nos dias de aporte). */
+    const firstTradeDate = trades[0].date;
+    const timeline = [];
     let accUSD = 0;
     let accBTC = 0;
-    trades.forEach((t) => {
-      accUSD += t.usd;
-      accBTC += t.btc;
+
+    // Busca índice da primeira data de preço >= firstTradeDate (binary search)
+    let startIdx = 0;
+    {
+      let lo = 0, hi = priceDates.length - 1;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (priceDates[mid] < firstTradeDate) lo = mid + 1;
+        else hi = mid;
+      }
+      startIdx = lo;
+    }
+
+    // Para não gerar centenas de milhares de pontos, faz downsampling:
+    // se o range > 730 dias, pula dias para ter ~500 pontos finais
+    const totalDays = priceDates.length - startIdx;
+    const step = Math.max(1, Math.floor(totalDays / 500));
+
+    for (let i = startIdx; i < priceDates.length; i++) {
+      const ds = priceDates[i];
+      // Se houve aporte neste dia, acumula
+      const trade = tradesByDate.get(ds);
+      if (trade) {
+        accUSD += trade.usd;
+        accBTC += trade.btc;
+      }
+      // Sempre inclui dias de aporte; intermediários apenas a cada `step` dias
+      const isTradeDay = !!trade;
+      const isSampled = (i - startIdx) % step === 0;
+      const isLast = i === priceDates.length - 1;
+      if (!isTradeDay && !isSampled && !isLast) continue;
+
+      const price = priceMap.get(ds);
       timeline.push({
-        date: t.date,
+        date: ds,
         totalUSD: accUSD,
         totalBTC: accBTC,
-        value: accBTC * t.price,
-      });
-    });
-    // Adicionar ponto "hoje" para ver valor atual
-    const todayStr = dataBounds.max;
-    if (timeline.length > 0 && timeline[timeline.length - 1].date < todayStr) {
-      timeline.push({
-        date: todayStr,
-        totalUSD: accUSD,
-        totalBTC: accBTC,
-        value: accBTC * currentPrice,
+        value: accBTC * price,
       });
     }
 
@@ -419,7 +456,7 @@ export default function DCASimulator() {
       timeline,
       totalScheduled: aporteDates.length,
     };
-  }, [priceMap, priceData, aporteDates, amount, indicator, indicatorData, threshold, getPriceWithFallback, dataBounds.max]);
+  }, [priceMap, priceData, priceDates, aporteDates, amount, indicator, indicatorData, threshold, getPriceWithFallback, dataBounds.max]);
 
   // Chart ref e instância
   const chartRef = useRef(null);
