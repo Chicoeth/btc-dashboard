@@ -459,6 +459,10 @@ export default function DCASimulator() {
         totalUSD: accUSD,
         totalBTC: accBTC,
         value: accBTC * price,
+        isPurchase: isTradeDay,
+        purchaseUSD: trade ? trade.usd : 0,
+        purchaseBTC: trade ? trade.btc : 0,
+        priceAtPurchase: trade ? trade.price : null,
       });
     }
 
@@ -511,6 +515,17 @@ export default function DCASimulator() {
       const dates = simulation.timeline.map((p) => p.date);
       const investedSeries = simulation.timeline.map((p) => +p.totalUSD.toFixed(2));
       const valueSeries = simulation.timeline.map((p) => +p.value.toFixed(2));
+      // Série de aportes: array com value para dias de aporte, null para os demais
+      // Usa null em vez de filtrar para manter o mesmo eixo X (category) sincronizado
+      const purchaseSeries = simulation.timeline.map((p) =>
+        p.isPurchase ? +p.value.toFixed(2) : null
+      );
+      // Tamanho da bolinha: menor quando há muitos aportes pra não poluir
+      const numPurchases = simulation.numTrades;
+      const purchaseSize =
+        numPurchases > 500 ? 4 :
+        numPurchases > 100 ? 5 :
+        numPurchases > 30  ? 6 : 7;
 
       const option = {
         backgroundColor: 'transparent',
@@ -528,13 +543,21 @@ export default function DCASimulator() {
             const date = params[0].axisValueLabel;
             const [y, m, d] = date.split('-');
             const dateBR = `${d}/${m}/${y}`;
+            const idx = params[0].dataIndex;
+            const point = simulation.timeline[idx];
             const invested = params.find((p) => p.seriesName === 'Aportado')?.value ?? 0;
             const value = params.find((p) => p.seriesName === 'Valor Atual')?.value ?? 0;
             const pnl = value - invested;
             const pnlPct = invested > 0 ? (pnl / invested) * 100 : 0;
             const pnlColor = pnl >= 0 ? '#00c44f' : '#e8000a';
+            const purchaseInfo = (point && point.isPurchase) ? `
+              <div style="display:flex;justify-content:space-between;gap:18px;margin-bottom:6px;padding-bottom:6px;border-bottom:1px solid #1e1e35;">
+                <span style="color:#00c44f;">🟢 Aporte:</span>
+                <span style="color:#00c44f;font-weight:600;">+${fmtUSD(point.purchaseUSD)} @ ${fmtUSD(point.priceAtPurchase)}</span>
+              </div>` : '';
             return `
               <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#8080a8;margin-bottom:6px;">${dateBR}</div>
+              ${purchaseInfo}
               <div style="display:flex;justify-content:space-between;gap:18px;margin-bottom:3px;">
                 <span style="color:#9090b0;">Aportado:</span>
                 <span style="color:#e8e8f0;font-weight:500;">${fmtUSD(invested)}</span>
@@ -551,7 +574,7 @@ export default function DCASimulator() {
           },
         },
         legend: {
-          data: ['Aportado', 'Valor Atual'],
+          data: ['Aportado', 'Valor Atual', 'Aportes'],
           top: 6,
           right: 16,
           textStyle: { color: '#9090b0', fontSize: 11, fontFamily: 'JetBrains Mono' },
@@ -611,6 +634,28 @@ export default function DCASimulator() {
               ]),
             },
             z: 5,
+          },
+          {
+            name: 'Aportes',
+            type: 'scatter',
+            data: purchaseSeries,
+            symbolSize: purchaseSize,
+            itemStyle: {
+              color: 'rgba(0,196,79,0.85)',
+              borderColor: '#00c44f',
+              borderWidth: 1,
+            },
+            emphasis: {
+              scale: 1.6,
+              itemStyle: {
+                color: '#00c44f',
+                borderColor: '#00ff5a',
+                borderWidth: 1.5,
+                shadowBlur: 8,
+                shadowColor: 'rgba(0,196,79,0.6)',
+              },
+            },
+            z: 7,
           },
         ],
       };
@@ -852,7 +897,7 @@ export default function DCASimulator() {
             <div className="chart-header">
               <div className="chart-title">Evolução do patrimônio</div>
               <div className="chart-sub">
-                Valor atual em <span className="orange">laranja</span> · Total aportado em <span className="muted">tracejado</span>
+                Valor atual em <span className="orange">laranja</span> · Aportado em <span className="muted">tracejado</span> · Aportes em <span className="green">●</span>
               </div>
             </div>
             <div className="chart-canvas-wrap">
@@ -1172,6 +1217,7 @@ export default function DCASimulator() {
         }
         .chart-sub .orange { color: var(--brand-orange); font-weight: 600; }
         .chart-sub .muted { color: var(--text-secondary); }
+        .chart-sub .green { color: #00c44f; font-weight: 700; font-size: 13px; }
 
         .chart-footer {
           display: flex;
