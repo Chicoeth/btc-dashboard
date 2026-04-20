@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import * as echarts from 'echarts';
 import { useTheme } from '../ThemeContext';
 import { patchOption } from '../chartThemeHelper';
 
@@ -158,6 +157,10 @@ export default function DCASimulator() {
   const [loading, setLoading] = useState(true);
   const [loadingIndicator, setLoadingIndicator] = useState(false);
   const [error, setError] = useState(null);
+  const [echartsReady, setEchartsReady] = useState(false);
+
+  // Carrega echarts dinamicamente (evita SSR issues no Next.js)
+  useEffect(() => { import('echarts').then(() => setEchartsReady(true)); }, []);
 
   // Aviso de ajuste de data
   const [dateAdjusted, setDateAdjusted] = useState(null);
@@ -422,138 +425,156 @@ export default function DCASimulator() {
   const chartRef = useRef(null);
   const chartInstanceRef = useRef(null);
 
-  // Init do chart
+  // Init + update do chart (padrão MVRVChart: dynamic import + init lazy)
   useEffect(() => {
-    if (!chartRef.current) return;
-    const chart = echarts.init(chartRef.current, null, { renderer: 'canvas' });
-    chartInstanceRef.current = chart;
-    const ro = new ResizeObserver(() => chart.resize());
-    ro.observe(chartRef.current);
+    if (!echartsReady || !chartRef.current) return;
+
+    let cleanup = null;
+
+    const run = async () => {
+      const echarts = await import('echarts');
+      let chart = chartInstanceRef.current;
+      if (!chart) {
+        chart = echarts.init(chartRef.current, null, { renderer: 'canvas' });
+        chartInstanceRef.current = chart;
+        const ro = new ResizeObserver(() => chart.resize());
+        ro.observe(chartRef.current);
+        cleanup = () => {
+          ro.disconnect();
+        };
+      }
+
+      if (!simulation || !simulation.timeline || simulation.timeline.length === 0) {
+        chart.clear();
+        return;
+      }
+
+      const dates = simulation.timeline.map((p) => p.date);
+      const investedSeries = simulation.timeline.map((p) => +p.totalUSD.toFixed(2));
+      const valueSeries = simulation.timeline.map((p) => +p.value.toFixed(2));
+
+      const option = {
+        backgroundColor: 'transparent',
+        animation: false,
+        grid: { left: 72, right: 48, top: 36, bottom: 48 },
+        tooltip: {
+          trigger: 'axis',
+          backgroundColor: '#0a0a0f',
+          borderColor: '#1e1e35',
+          borderWidth: 1,
+          textStyle: { color: '#e8e8f0', fontSize: 12, fontFamily: 'DM Sans' },
+          axisPointer: { type: 'line', lineStyle: { color: '#3a3a5e', type: 'dashed' } },
+          formatter: (params) => {
+            if (!params || params.length === 0) return '';
+            const date = params[0].axisValueLabel;
+            const [y, m, d] = date.split('-');
+            const dateBR = `${d}/${m}/${y}`;
+            const invested = params.find((p) => p.seriesName === 'Aportado')?.value ?? 0;
+            const value = params.find((p) => p.seriesName === 'Valor Atual')?.value ?? 0;
+            const pnl = value - invested;
+            const pnlPct = invested > 0 ? (pnl / invested) * 100 : 0;
+            const pnlColor = pnl >= 0 ? '#00c44f' : '#e8000a';
+            return `
+              <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#8080a8;margin-bottom:6px;">${dateBR}</div>
+              <div style="display:flex;justify-content:space-between;gap:18px;margin-bottom:3px;">
+                <span style="color:#9090b0;">Aportado:</span>
+                <span style="color:#e8e8f0;font-weight:500;">${fmtUSD(invested)}</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;gap:18px;margin-bottom:3px;">
+                <span style="color:#9090b0;">Valor atual:</span>
+                <span style="color:#f7931a;font-weight:500;">${fmtUSD(value)}</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;gap:18px;margin-top:6px;padding-top:6px;border-top:1px solid #1e1e35;">
+                <span style="color:#9090b0;">P&L:</span>
+                <span style="color:${pnlColor};font-weight:600;">${fmtUSD(pnl)} (${fmtPct(pnlPct)})</span>
+              </div>
+            `;
+          },
+        },
+        legend: {
+          data: ['Aportado', 'Valor Atual'],
+          top: 6,
+          right: 16,
+          textStyle: { color: '#9090b0', fontSize: 11, fontFamily: 'JetBrains Mono' },
+          itemWidth: 18,
+          itemHeight: 8,
+          itemGap: 18,
+        },
+        xAxis: {
+          type: 'category',
+          data: dates,
+          axisLine: { lineStyle: { color: '#3a3a5e' } },
+          axisLabel: {
+            color: '#8080a8',
+            fontSize: 10,
+            fontFamily: 'JetBrains Mono',
+            formatter: (val) => {
+              const [y, m] = val.split('-');
+              return `${m}/${y.slice(2)}`;
+            },
+          },
+          axisTick: { show: false },
+        },
+        yAxis: {
+          type: 'value',
+          axisLine: { show: false },
+          axisTick: { show: false },
+          axisLabel: {
+            color: '#8080a8',
+            fontSize: 10,
+            fontFamily: 'JetBrains Mono',
+            formatter: (v) => fmtUSDShort(v),
+          },
+          splitLine: { lineStyle: { color: '#1e1e35', type: 'dashed' } },
+        },
+        series: [
+          {
+            name: 'Aportado',
+            type: 'line',
+            data: investedSeries,
+            smooth: false,
+            step: 'end',
+            symbol: 'none',
+            lineStyle: { color: '#7878c0', width: 1.5, type: 'dashed' },
+            z: 3,
+          },
+          {
+            name: 'Valor Atual',
+            type: 'line',
+            data: valueSeries,
+            smooth: true,
+            symbol: 'none',
+            lineStyle: { color: '#f7931a', width: 2 },
+            areaStyle: {
+              color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                { offset: 0, color: 'rgba(247,147,26,0.25)' },
+                { offset: 1, color: 'rgba(247,147,26,0.02)' },
+              ]),
+            },
+            z: 5,
+          },
+        ],
+      };
+
+      chart.setOption(patchOption(option, isDark), { notMerge: true });
+    };
+
+    run();
+
     return () => {
-      ro.disconnect();
-      chart.dispose();
-      chartInstanceRef.current = null;
+      if (cleanup) cleanup();
+    };
+  }, [echartsReady, simulation, isDark]);
+
+  // Dispose do chart no unmount
+  useEffect(() => {
+    return () => {
+      if (chartInstanceRef.current) {
+        chartInstanceRef.current.dispose();
+        chartInstanceRef.current = null;
+      }
     };
   }, []);
-
-  // Update do chart
-  useEffect(() => {
-    const chart = chartInstanceRef.current;
-    if (!chart) return;
-    if (!simulation || !simulation.timeline || simulation.timeline.length === 0) {
-      chart.clear();
-      return;
-    }
-
-    const dates = simulation.timeline.map((p) => p.date);
-    const investedSeries = simulation.timeline.map((p) => +p.totalUSD.toFixed(2));
-    const valueSeries = simulation.timeline.map((p) => +p.value.toFixed(2));
-
-    const option = {
-      backgroundColor: 'transparent',
-      animation: false,
-      grid: { left: 72, right: 48, top: 36, bottom: 48 },
-      tooltip: {
-        trigger: 'axis',
-        backgroundColor: '#0a0a0f',
-        borderColor: '#1e1e35',
-        borderWidth: 1,
-        textStyle: { color: '#e8e8f0', fontSize: 12, fontFamily: 'DM Sans' },
-        axisPointer: { type: 'line', lineStyle: { color: '#3a3a5e', type: 'dashed' } },
-        formatter: (params) => {
-          if (!params || params.length === 0) return '';
-          const date = params[0].axisValueLabel;
-          const [y, m, d] = date.split('-');
-          const dateBR = `${d}/${m}/${y}`;
-          const invested = params.find((p) => p.seriesName === 'Aportado')?.value ?? 0;
-          const value = params.find((p) => p.seriesName === 'Valor Atual')?.value ?? 0;
-          const pnl = value - invested;
-          const pnlPct = invested > 0 ? (pnl / invested) * 100 : 0;
-          const pnlColor = pnl >= 0 ? '#00c44f' : '#e8000a';
-          return `
-            <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#8080a8;margin-bottom:6px;">${dateBR}</div>
-            <div style="display:flex;justify-content:space-between;gap:18px;margin-bottom:3px;">
-              <span style="color:#9090b0;">Aportado:</span>
-              <span style="color:#e8e8f0;font-weight:500;">${fmtUSD(invested)}</span>
-            </div>
-            <div style="display:flex;justify-content:space-between;gap:18px;margin-bottom:3px;">
-              <span style="color:#9090b0;">Valor atual:</span>
-              <span style="color:#f7931a;font-weight:500;">${fmtUSD(value)}</span>
-            </div>
-            <div style="display:flex;justify-content:space-between;gap:18px;margin-top:6px;padding-top:6px;border-top:1px solid #1e1e35;">
-              <span style="color:#9090b0;">P&L:</span>
-              <span style="color:${pnlColor};font-weight:600;">${fmtUSD(pnl)} (${fmtPct(pnlPct)})</span>
-            </div>
-          `;
-        },
-      },
-      legend: {
-        data: ['Aportado', 'Valor Atual'],
-        top: 6,
-        right: 16,
-        textStyle: { color: '#9090b0', fontSize: 11, fontFamily: 'JetBrains Mono' },
-        itemWidth: 18,
-        itemHeight: 8,
-        itemGap: 18,
-      },
-      xAxis: {
-        type: 'category',
-        data: dates,
-        axisLine: { lineStyle: { color: '#3a3a5e' } },
-        axisLabel: {
-          color: '#8080a8',
-          fontSize: 10,
-          fontFamily: 'JetBrains Mono',
-          formatter: (val) => {
-            const [y, m] = val.split('-');
-            return `${m}/${y.slice(2)}`;
-          },
-        },
-        axisTick: { show: false },
-      },
-      yAxis: {
-        type: 'value',
-        axisLine: { show: false },
-        axisTick: { show: false },
-        axisLabel: {
-          color: '#8080a8',
-          fontSize: 10,
-          fontFamily: 'JetBrains Mono',
-          formatter: (v) => fmtUSDShort(v),
-        },
-        splitLine: { lineStyle: { color: '#1e1e35', type: 'dashed' } },
-      },
-      series: [
-        {
-          name: 'Aportado',
-          type: 'line',
-          data: investedSeries,
-          smooth: false,
-          step: 'end',
-          symbol: 'none',
-          lineStyle: { color: '#7878c0', width: 1.5, type: 'dashed' },
-          z: 3,
-        },
-        {
-          name: 'Valor Atual',
-          type: 'line',
-          data: valueSeries,
-          smooth: true,
-          symbol: 'none',
-          lineStyle: { color: '#f7931a', width: 2 },
-          areaStyle: {
-            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-              { offset: 0, color: 'rgba(247,147,26,0.25)' },
-              { offset: 1, color: 'rgba(247,147,26,0.02)' },
-            ]),
-          },
-          z: 5,
-        },
-      ],
-    };
-
-    chart.setOption(patchOption(option, isDark), { notMerge: true });
-  }, [simulation, isDark]);
 
   // ---------- Render ----------
   const currentInd = indicator !== 'none' ? INDICATORS[indicator] : null;
