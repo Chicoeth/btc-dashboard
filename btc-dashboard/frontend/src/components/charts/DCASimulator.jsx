@@ -63,6 +63,21 @@ const INDICATORS = {
 };
 
 // ---------- Helpers de data ----------
+function isValidDateStr(s) {
+  // Valida formato 'YYYY-MM-DD' onde YYYY >= 1900 e a data é real
+  if (typeof s !== 'string') return false;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  if (!m) return false;
+  const y = +m[1], mo = +m[2], d = +m[3];
+  if (y < 1900 || y > 2100) return false;
+  if (mo < 1 || mo > 12) return false;
+  if (d < 1 || d > 31) return false;
+  const t = Date.UTC(y, mo - 1, d);
+  if (!isFinite(t)) return false;
+  const dt = new Date(t);
+  return dt.getUTCFullYear() === y && (dt.getUTCMonth() + 1) === mo && dt.getUTCDate() === d;
+}
+
 function toDateStr(ts) {
   // timestamp ms → 'YYYY-MM-DD' em UTC
   return new Date(ts).toISOString().split('T')[0];
@@ -280,8 +295,12 @@ export default function DCASimulator() {
   // Gera as datas de aporte de acordo com a frequência
   const aporteDates = useMemo(() => {
     if (!priceMap) return [];
+    // Valida datas antes de processar — input HTML pode mandar strings inválidas temporariamente
+    if (!isValidDateStr(startDate)) return [];
     const start = startDate;
-    const end = useEndDate && endDate ? endDate : dataBounds.max;
+    const end = useEndDate && endDate
+      ? (isValidDateStr(endDate) ? endDate : dataBounds.max)
+      : dataBounds.max;
     if (start > end) return [];
 
     const dates = [];
@@ -485,6 +504,9 @@ export default function DCASimulator() {
         chart.clear();
         return;
       }
+
+      // Garante que o chart tem as dimensões corretas do container (DOM pode ter mudado)
+      chart.resize();
 
       const dates = simulation.timeline.map((p) => p.date);
       const investedSeries = simulation.timeline.map((p) => +p.totalUSD.toFixed(2));
@@ -771,54 +793,61 @@ export default function DCASimulator() {
         )}
       </div>
 
-      {/* Resultado */}
+      {/* Resultado — container sempre montado para preservar o chartRef */}
       {loading ? (
         <div className="status-box">Carregando dados...</div>
       ) : error ? (
         <div className="status-box error">{error}</div>
-      ) : loadingIndicator ? (
-        <div className="status-box">Carregando indicador...</div>
-      ) : !sim ? (
-        <div className="status-box">Ajuste os parâmetros para simular.</div>
-      ) : sim.numTrades === 0 ? (
-        <div className="status-box">
-          Nenhum aporte realizado com esses parâmetros.
-          {indicator !== 'none' && ' A condição do indicador não foi cumprida em nenhuma data programada.'}
-        </div>
       ) : (
         <>
-          {/* Cards de resultado */}
+          {/* Cards de resultado (ou placeholders) */}
           <div className="result-grid">
             <div className="result-card">
               <div className="result-label">Aportes realizados</div>
-              <div className="result-value">{sim.numTrades.toLocaleString('pt-BR')}</div>
+              <div className="result-value">
+                {sim && sim.numTrades > 0 ? sim.numTrades.toLocaleString('pt-BR') : '—'}
+              </div>
               <div className="result-sub">
-                {indicator !== 'none' && sim.totalScheduled > sim.numTrades
-                  ? `de ${sim.totalScheduled.toLocaleString('pt-BR')} programados (${((sim.numTrades / sim.totalScheduled) * 100).toFixed(0)}%)`
-                  : 'todos executados'}
+                {sim && sim.numTrades > 0
+                  ? (indicator !== 'none' && sim.totalScheduled > sim.numTrades
+                      ? `de ${sim.totalScheduled.toLocaleString('pt-BR')} programados (${((sim.numTrades / sim.totalScheduled) * 100).toFixed(0)}%)`
+                      : 'todos executados')
+                  : '\u00A0'}
               </div>
             </div>
 
             <div className="result-card">
               <div className="result-label">Total aportado</div>
-              <div className="result-value">{fmtUSDShort(sim.totalUSD)}</div>
-              <div className="result-sub">{fmtBTC(sim.totalBTC)}</div>
+              <div className="result-value">
+                {sim && sim.numTrades > 0 ? fmtUSDShort(sim.totalUSD) : '—'}
+              </div>
+              <div className="result-sub">
+                {sim && sim.numTrades > 0 ? fmtBTC(sim.totalBTC) : '\u00A0'}
+              </div>
             </div>
 
             <div className="result-card">
               <div className="result-label">Preço médio de compra</div>
-              <div className="result-value">{fmtUSD(sim.avgPrice)}</div>
-              <div className="result-sub">vs. atual {fmtUSDShort(sim.currentPrice)}</div>
+              <div className="result-value">
+                {sim && sim.numTrades > 0 ? fmtUSD(sim.avgPrice) : '—'}
+              </div>
+              <div className="result-sub">
+                {sim && sim.numTrades > 0 ? `vs. atual ${fmtUSDShort(sim.currentPrice)}` : '\u00A0'}
+              </div>
             </div>
 
-            <div className={`result-card highlight ${sim.profit >= 0 ? 'pos' : 'neg'}`}>
+            <div className={`result-card highlight ${sim && sim.profit >= 0 ? 'pos' : sim && sim.profit < 0 ? 'neg' : ''}`}>
               <div className="result-label">Lucro / Prejuízo</div>
-              <div className="result-value">{fmtPct(sim.profitPct)}</div>
-              <div className="result-sub">{fmtUSD(sim.profit)}</div>
+              <div className="result-value">
+                {sim && sim.numTrades > 0 ? fmtPct(sim.profitPct) : '—'}
+              </div>
+              <div className="result-sub">
+                {sim && sim.numTrades > 0 ? fmtUSD(sim.profit) : '\u00A0'}
+              </div>
             </div>
           </div>
 
-          {/* Gráfico */}
+          {/* Gráfico — container SEMPRE montado para preservar a instância do ECharts */}
           <div className="chart-wrap">
             <div className="chart-header">
               <div className="chart-title">Evolução do patrimônio</div>
@@ -826,11 +855,28 @@ export default function DCASimulator() {
                 Valor atual em <span className="orange">laranja</span> · Total aportado em <span className="muted">tracejado</span>
               </div>
             </div>
-            <div ref={chartRef} style={{ width: '100%', height: '380px' }} />
+            <div className="chart-canvas-wrap">
+              <div ref={chartRef} style={{ width: '100%', height: '380px' }} />
+              {/* Overlays em cima do chart quando em loading ou sem dados */}
+              {loadingIndicator && (
+                <div className="chart-overlay">Carregando indicador...</div>
+              )}
+              {!loadingIndicator && (!sim || sim.numTrades === 0) && (
+                <div className="chart-overlay">
+                  {!sim
+                    ? 'Ajuste os parâmetros para simular.'
+                    : `Nenhum aporte realizado com esses parâmetros.${indicator !== 'none' ? ' A condição do indicador não foi cumprida em nenhuma data programada.' : ''}`}
+                </div>
+              )}
+            </div>
             <div className="chart-footer">
-              <span>{sim.numTrades} aportes</span>
+              <span>{sim && sim.numTrades > 0 ? `${sim.numTrades} aportes` : '—'}</span>
               <span>·</span>
-              <span>{fmtDateBR(sim.trades[0].date)} → {fmtDateBR(sim.trades[sim.trades.length - 1].date)}</span>
+              <span>
+                {sim && sim.numTrades > 0
+                  ? `${fmtDateBR(sim.trades[0].date)} → ${fmtDateBR(sim.trades[sim.trades.length - 1].date)}`
+                  : '—'}
+              </span>
               <span>·</span>
               <span>Fonte: Yahoo Finance / CSV histórico</span>
             </div>
@@ -1084,6 +1130,26 @@ export default function DCASimulator() {
         .chart-wrap {
           margin: 0;
           border-top: 1px solid var(--border-subtle);
+        }
+        .chart-canvas-wrap {
+          position: relative;
+        }
+        .chart-overlay {
+          position: absolute;
+          inset: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          text-align: center;
+          padding: 24px;
+          font-family: var(--font-mono);
+          font-size: 12px;
+          color: var(--text-muted);
+          background: var(--bg-card);
+          pointer-events: none;
+          line-height: 1.5;
+          max-width: 600px;
+          margin: 0 auto;
         }
         .chart-header {
           display: flex;
