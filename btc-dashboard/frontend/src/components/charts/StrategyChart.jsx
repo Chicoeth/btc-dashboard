@@ -534,7 +534,7 @@ export default function StrategyChart({ strategyData, priceData, loading, error 
         <span>·</span>
         <span>{data.length ? `${data[0].date} → ${data[data.length-1].date}` : ''}</span>
         <span>·</span>
-        <span>Fonte: Strategy (MSTR) · bitcointreasuries.net</span>
+        <span>Fonte: Strategy (MSTR) · bitbo.io</span>
       </div>
 
       <style jsx>{`
